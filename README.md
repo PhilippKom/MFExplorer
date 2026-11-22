@@ -7,6 +7,10 @@ MFExplorer übernimmt den Aufbau und die Gewohnheiten des Windows Explorers: Ord
 
 > Die App ist zurzeit nur auf **Deutsch** verfügbar.
 
+![Detailansicht mit Ordnerbaum und Vorschau](docs/screenshots/details.png)
+
+![Symbolansicht mit Vorschaubildern](docs/screenshots/symbole.png)
+
 ## Funktionen
 
 - **Ordnerbaum, der stillhält:** Seitenleiste und Hauptansicht navigieren unabhängig voneinander. So zieht man Dateien mühelos von einem Ort an einen anderen.
@@ -15,7 +19,8 @@ MFExplorer übernimmt den Aufbau und die Gewohnheiten des Windows Explorers: Ord
 - **Sicher:** Löschen legt immer in den Papierkorb. Nichts wird ungefragt überschrieben, die App fragt dann „Beide behalten / Ersetzen / Überspringen“. **Jede Aktion lässt sich mit ⌘Z rückgängig machen.**
 - **Ausschneiden, Kopieren, Einfügen**, Umbenennen mit F2, neuer Ordner, Rechtsklick-Menüs, Auswahlrechteck
 - **Vorschaubereich** und **Schnellansicht mit der Leertaste**, für Ordner mit Anzahl, Größe und Datum
-- **Tabs**, **Suche** in allen Unterordnern, ZIP packen und entpacken, Tags, Eigenschaften-Fenster
+- **Tabs**, **Suche** nach Namen oder im Dateiinhalt (über den macOS-Suchindex) in allen Unterordnern, ZIP packen und entpacken, Tags, Eigenschaften-Fenster
+- Beim Kopieren werden **gleichnamige Ordner zusammengeführt**, wie bei Windows.
 - **Windows-Tastenkürzel:** F2, Entf, Enter, ⌥↑ (eine Ebene hoch), F5. In den Einstellungen gibt es dazu optional Strg+C/V/X/Z usw.
 
 ## Installation

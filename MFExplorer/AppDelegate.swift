@@ -107,7 +107,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let path = defaults.string(forKey: "snapshotPath") else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             guard let controller = self?.windowControllers.first, let mainView = controller.window?.contentView else { return }
-            if defaults.bool(forKey: "debugReveal") { controller.revealInTree(nil) }
+            if defaults.bool(forKey: "debugReveal") {
+                controller.revealInTree(nil)
+                controller.sidebarVC.outline.deselectAll(nil)   // selection looks black on these pictures
+            }
+            if let preview = defaults.string(forKey: "debugPreview") { controller.debugSetPreviewVisible(preview == "on") }
             if let query = defaults.string(forKey: "debugSearch") {
                 controller.fileListVC.startSearch(query, in: controller.currentURL)
             }

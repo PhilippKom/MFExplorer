@@ -281,6 +281,14 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         }
     }
 
+    #if DEBUG
+    /// Test pictures only: show/hide the preview pane without saving it as a setting.
+    func debugSetPreviewVisible(_ visible: Bool) {
+        previewSplitItem.isCollapsed = !visible
+        commandBar.setPreviewVisible(visible)
+    }
+    #endif
+
     @objc func togglePreviewPane(_ sender: Any?) {
         let show = previewSplitItem.isCollapsed
         UserDefaults.standard.set(show, forKey: "showPreviewPane")
