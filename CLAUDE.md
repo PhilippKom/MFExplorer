@@ -33,6 +33,7 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
   Inhalte, die macOS in einem eigenen Prozess zeichnet (Bild-/HTML-Vorschau), erscheinen auf diesen Bildern leer.
 - Selbsttest der Dateioperationen (nur Debug-Build, arbeitet nur in `~/ExplorerTest/_selftest`):
   `open -n build/Debug/MacExplorer.app --args -selfTest <scratchpad>/selftest.log`
+- Such-Test (wartet bis die Suche fertig ist, schreibt Treffer + Fundstelle): `open -n build/Debug/MacExplorer.app --args -startPath ~/ExplorerTest/Inhaltstest -searchContent YES -searchTestWord Umsatz -searchTest <scratchpad>/search.log`
 - Tab-Test (öffnet 3 Tabs, schließt einen, prüft dass die App weiterläuft): `open -n build/Debug/MacExplorer.app --args -tabTest <scratchpad>/tabtest.log`
 - Absturzprotokolle: `~/Library/Logs/DiagnosticReports/MacExplorer-*.ips`. QLPreviewView nie selbst `close()` aufrufen (schließt sich mit dem Fenster). – schreibt PASS/FAIL ins Protokoll und beendet sich. Nach Änderungen an `FileOperations.swift` immer laufen lassen.
 
@@ -44,3 +45,5 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - `Bars.swift`: Adress- (mit Suchfeld), Befehls- und Statusleiste. `PropertiesWindow.swift`: Eigenschaften-Fenster.
 - `IconView.swift`: Symbolansicht mit Vorschaubildern. `Preview.swift`: Vorschaubereich und Schnellansicht. `SettingsWindow.swift`: Einstellungen.
 - Tabs sind native macOS-Fenster-Tabs (jeder Tab = ein `MainWindowController`).
+- `ContentSearch.swift`: Inhaltssuche über den Spotlight-Index (NSMetadataQuery) und die Zeile für die Spalte „Fundstelle“.
+- Gleichnamige Ordner werden beim Kopieren/Verschieben zusammengeführt (`FileOps.plan`), danach Hinweis.

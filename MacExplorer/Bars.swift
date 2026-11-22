@@ -66,6 +66,7 @@ final class AddressBarView: NSView {
     let refreshButton = BarButton.make(symbol: "arrow.clockwise", tip: "Aktualisieren (⌘R oder F5)", action: #selector(MainWindowController.refresh(_:)))
     let breadcrumb = BreadcrumbView()
     let searchField = NSSearchField()
+    let contentToggle = NSButton()
     var onSearch: ((String) -> Void)?
 
     override init(frame: NSRect) {
@@ -76,8 +77,15 @@ final class AddressBarView: NSView {
         searchField.sendsWholeSearchString = false
         searchField.target = self
         searchField.action = #selector(searchChanged(_:))
-        searchField.toolTip = "Sucht nach Namen im aktuellen Ordner und allen Unterordnern (⌘F)"
-        let stack = NSStackView(views: [backButton, forwardButton, upButton, refreshButton, breadcrumb, searchField])
+        searchField.toolTip = "Sucht im aktuellen Ordner und allen Unterordnern nach Namen – mit „Inhalt“ auch im Text der Dateien (⌘F)"
+        BarButton.configure(contentToggle, symbol: "doc.text.magnifyingglass", title: "Inhalt",
+                            tip: "Auch im Inhalt von Dateien suchen (Texte, PDFs, Word, Excel …). Nutzt den Suchindex von macOS.",
+                            action: #selector(contentToggled(_:)))
+        contentToggle.target = self
+        contentToggle.setButtonType(.pushOnPushOff)
+        contentToggle.state = Settings.shared.searchContent ? .on : .off
+        NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: .settingsChanged, object: nil)
+        let stack = NSStackView(views: [backButton, forwardButton, upButton, refreshButton, breadcrumb, searchField, contentToggle])
         stack.orientation = .horizontal
         stack.spacing = 2
         stack.setCustomSpacing(8, after: refreshButton)
@@ -95,6 +103,14 @@ final class AddressBarView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func contentToggled(_ sender: NSButton) {
+        Settings.shared.searchContent = sender.state == .on   // running searches restart by themselves
+    }
+
+    @objc private func settingsChanged() {
+        contentToggle.state = Settings.shared.searchContent ? .on : .off
+    }
 
     @objc private func searchChanged(_ sender: NSSearchField) {
         onSearch?(sender.stringValue.trimmingCharacters(in: .whitespaces))

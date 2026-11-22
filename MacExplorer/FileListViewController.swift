@@ -118,6 +118,7 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         Column(id: "accessed", title: "Zugriffsdatum", width: 150, visible: false),
         Column(id: "tags", title: "Tags", width: 120, visible: false),
         Column(id: "location", title: "Ordner", width: 260, visible: false),
+        Column(id: "snippet", title: "Fundstelle", width: 380, visible: false),
     ]
 
     weak var delegate: FileListDelegate?
@@ -145,6 +146,23 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
     private(set) var searchQuery: String?
     private(set) var isSearchRunning = false
     private var locationColumnWasHidden = true
+
+    // Content search ("Inhalt")
+    private let contentSearch = ContentSearch()
+    private var searchesContent = false
+    private var nameSearchDone = true
+    private var contentSearchDone = true
+    private var nameHits = Set<URL>()
+    private var contentHits = Set<URL>()
+    private enum SnippetState { case text(String), unreadable }
+    private var snippets: [URL: SnippetState] = [:]
+    private var snippetsLoading = Set<URL>()
+    private let snippetQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 2
+        queue.qualityOfService = .utility
+        return queue
+    }()
 
     /// The view that has the keyboard focus in the current mode.
     var activeView: NSView { viewMode == .details ? tableView : iconView }
@@ -222,6 +240,7 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         tableView.autosaveTableColumns = true
         // The search column is only shown while searching.
         tableView.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier("location"))?.isHidden = true
+        tableView.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier("snippet"))?.isHidden = true
 
         tableView.dataSource = self
         tableView.delegate = self
@@ -446,6 +465,7 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
     // MARK: - Search
 
     /// Finds files and folders whose name contains `query`, in `root` and all subfolders.
+    /// With the "Inhalt" switch on, also files whose content contains it (via the macOS search index).
     /// Results appear while the search is still running.
     func startSearch(_ query: String, in root: URL) {
         if searchQuery == nil {
@@ -453,11 +473,21 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
             locationColumnWasHidden = column?.isHidden ?? true
             column?.isHidden = false
         }
+        contentSearch.stop()
+        snippetQueue.cancelAllOperations()
         searchQuery = query
+        searchesContent = Settings.shared.searchContent
+        tableView.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier("snippet"))?.isHidden = !searchesContent
         folderURL = root
         loadGeneration += 1
         let generation = loadGeneration
         items = []
+        nameHits = []
+        contentHits = []
+        snippets = [:]
+        snippetsLoading = []
+        nameSearchDone = false
+        contentSearchDone = !searchesContent
         isSearchRunning = true
         messageStack.isHidden = true
         reloadViews(keepSelection: false)
@@ -476,14 +506,10 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
                 batch = []
                 DispatchQueue.main.async {
                     guard let self, generation == self.loadGeneration else { return }
-                    self.items.append(contentsOf: found)
-                    self.sortItems()
-                    self.reloadViews()
-                    if done {
-                        self.isSearchRunning = false
-                        if self.items.isEmpty { self.showMessage("Keine Treffer für „\(query)“.", button: false) }
-                    }
-                    self.delegate?.fileListDidChange(self)
+                    self.nameHits.formUnion(found.map(\.url.standardizedFileURL))
+                    self.addSearchResults(found)
+                    if done { self.nameSearchDone = true }
+                    self.searchStateChanged(query)
                 }
             }
             for case let url as URL in enumerator {
@@ -500,7 +526,107 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
             }
             flush(done: true)
         }
+
+        guard searchesContent else { return }
+        contentSearch.start(query, in: root) { [weak self] urls in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let found = Self.filterContentHits(urls, root: root, includeHidden: includeHidden).map(FileItem.init)
+                DispatchQueue.main.async {
+                    guard let self, generation == self.loadGeneration else { return }
+                    self.contentHits = Set(found.map(\.url.standardizedFileURL))
+                    self.addSearchResults(found)
+                    self.contentSearchDone = true
+                    self.searchStateChanged(query)
+                }
+            }
+        }
     }
+
+    /// Spotlight also looks inside app bundles and hidden folders – leave those out, like the name search does.
+    private static func filterContentHits(_ urls: [URL], root: URL, includeHidden: Bool) -> [URL] {
+        let rootPath = root.standardizedFileURL.path
+        var packageCache: [String: Bool] = [:]
+        return urls.filter { url in
+            let path = url.standardizedFileURL.path
+            guard path.hasPrefix(rootPath + "/") else { return false }
+            var parent = url.deletingLastPathComponent().standardizedFileURL
+            while parent.path.count > rootPath.count {
+                let isPackage = packageCache[parent.path] ?? ((try? parent.resourceValues(forKeys: [.isPackageKey]))?.isPackage ?? false)
+                packageCache[parent.path] = isPackage
+                if isPackage { return false }
+                parent = parent.deletingLastPathComponent()
+            }
+            if includeHidden { return true }
+            let relative = path.dropFirst(rootPath.count + 1)
+            return !relative.split(separator: "/").contains { $0.hasPrefix(".") }
+        }
+    }
+
+    private func addSearchResults(_ found: [FileItem]) {
+        let known = Set(items.map(\.url.standardizedFileURL))
+        let fresh = found.filter { !known.contains($0.url.standardizedFileURL) }
+        guard !fresh.isEmpty else { return }
+        items.append(contentsOf: fresh)
+        sortItems()
+        reloadViews()
+    }
+
+    private func searchStateChanged(_ query: String) {
+        isSearchRunning = !(nameSearchDone && contentSearchDone)
+        if !isSearchRunning && items.isEmpty {
+            showMessage("Keine Treffer für „\(query)“.", button: false)
+        }
+        if searchesContent { tableView.reloadData(forRowIndexes: IndexSet(items.indices), columnIndexes: snippetColumnIndexes) }
+        delegate?.fileListDidChange(self)
+    }
+
+    private var snippetColumnIndexes: IndexSet {
+        let index = tableView.column(withIdentifier: NSUserInterfaceItemIdentifier("snippet"))
+        return index >= 0 ? IndexSet(integer: index) : IndexSet()
+    }
+
+    /// Text for the "Fundstelle" column. The line is read only for rows that are actually visible.
+    private func snippetCell(_ item: FileItem) -> NSAttributedString {
+        func plain(_ text: String) -> NSAttributedString {
+            NSAttributedString(string: text, attributes: [.foregroundColor: NSColor.tertiaryLabelColor,
+                                                          .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)])
+        }
+        guard let query = searchQuery else { return plain("") }
+        let url = item.url.standardizedFileURL
+        if !contentHits.contains(url) {
+            return plain(nameHits.contains(url) ? "Treffer im Namen" : "")
+        }
+        switch snippets[url] {
+        case .text(let line)?: return Snippet.highlighted(line, word: query)
+        case .unreadable?: return plain("Im Inhalt gefunden")
+        case nil:
+            loadSnippet(for: url, query: query)
+            return plain("Wird gelesen …")
+        }
+    }
+
+    private func loadSnippet(for url: URL, query: String) {
+        guard !snippetsLoading.contains(url) else { return }
+        snippetsLoading.insert(url)
+        let generation = loadGeneration
+        snippetQueue.addOperation { [weak self] in
+            let line = Snippet.find(query, in: url)
+            DispatchQueue.main.async {
+                guard let self, generation == self.loadGeneration else { return }
+                self.snippets[url] = line.map { .text($0) } ?? .unreadable
+                if let row = self.items.firstIndex(where: { $0.url.standardizedFileURL == url }) {
+                    self.tableView.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: self.snippetColumnIndexes)
+                }
+            }
+        }
+    }
+
+    #if DEBUG
+    /// Test helper: what the "Fundstelle" column shows for each result.
+    func debugSearchReport() -> [String] {
+        items.map { "\($0.url.lastPathComponent) | \(snippetCell($0).string)" }
+    }
+    #endif
 
     /// Leave search mode and show the folder again.
     func endSearch() {
@@ -509,9 +635,12 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
     }
 
     private func endSearchMode() {
+        contentSearch.stop()
+        snippetQueue.cancelAllOperations()
         searchQuery = nil
         isSearchRunning = false
         tableView.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier("location"))?.isHidden = locationColumnWasHidden
+        tableView.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier("snippet"))?.isHidden = true
     }
 
     // MARK: - Sorting
@@ -580,8 +709,15 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         case "size": text = Format.size(item.size)
         case "tags": text = item.tags.joined(separator: ", ")
         case "location": text = locationText(item)
+        case "snippet":
+            cell.textField?.alignment = .left
+            cell.textField?.attributedStringValue = snippetCell(item)
+            cell.toolTip = cell.textField?.stringValue
+            cell.alphaValue = 1
+            return cell
         default: text = ""
         }
+        cell.toolTip = nil
         cell.textField?.stringValue = text
         cell.textField?.alignment = id == "size" ? .right : .left
         cell.textField?.textColor = .secondaryLabelColor

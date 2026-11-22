@@ -27,7 +27,7 @@ final class Settings {
     }
 
     private func flag(_ key: String, default value: Bool = false) -> Bool {
-        defaults.object(forKey: key) as? Bool ?? value
+        defaults.object(forKey: key) == nil ? value : defaults.bool(forKey: key)
     }
 
     private func setFlag(_ key: String, _ value: Bool) {
@@ -51,6 +51,12 @@ final class Settings {
     var windowsShortcuts: Bool {
         get { flag("windowsShortcuts") }
         set { setFlag("windowsShortcuts", newValue) }
+    }
+
+    /// Search also inside files (switch "Inhalt" next to the search field).
+    var searchContent: Bool {
+        get { flag("searchContent") }
+        set { setFlag("searchContent", newValue) }
     }
 
     /// "home", "last" or "custom".

@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         scheduleDebugSnapshot()
         if let path = UserDefaults.standard.string(forKey: "tabTest") { runTabTest(log: path) }
+        if let path = UserDefaults.standard.string(forKey: "searchTest") { runSearchTest(log: path) }
         if let path = UserDefaults.standard.string(forKey: "selfTest") {
             selfTest = DebugSelfTest(logPath: path)
             selfTest?.run()
@@ -32,6 +33,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     #if DEBUG
     private var selfTest: DebugSelfTest?
+
+    /// Test: search `-searchTestWord` in the start folder, wait until finished, write results + Fundstelle.
+    private func runSearchTest(log path: String) {
+        let word = UserDefaults.standard.string(forKey: "searchTestWord") ?? "Umsatz"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let controller = self?.windowControllers.first else { return }
+            let list = controller.fileListVC
+            let started = Date()
+            list.startSearch(word, in: controller.currentURL)
+            func poll() {
+                if list.isSearchRunning && Date().timeIntervalSince(started) < 20 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { poll() }
+                    return
+                }
+                let seconds = String(format: "%.1f", Date().timeIntervalSince(started))
+                _ = list.debugSearchReport()   // starts reading the lines
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    let lines = ["running=\(list.isSearchRunning) after \(seconds)s"] + list.debugSearchReport()
+                    try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+                    NSApp.terminate(nil)
+                }
+            }
+            poll()
+        }
+    }
 
     /// Test: open 3 tabs, close one, check that the app and the other 2 tabs are still there.
     private func runTabTest(log path: String) {
