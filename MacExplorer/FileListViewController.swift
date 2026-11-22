@@ -493,6 +493,11 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         return folderURL
     }
 
+    func tableView(_ tableView: NSTableView, updateDraggingItemsForDrag info: NSDraggingInfo) {
+        let nameColumn = tableView.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier("name"))
+        DropRules.showAsRows(info, in: tableView, width: nameColumn?.width ?? 300, rowHeight: tableView.rowHeight)
+    }
+
     func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int,
                    proposedDropOperation operation: NSTableView.DropOperation) -> NSDragOperation {
         if !(operation == .on && row >= 0 && row < items.count && items[row].isFolder) {

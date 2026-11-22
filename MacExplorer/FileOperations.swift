@@ -721,6 +721,41 @@ enum DropRules {
         return kind == .copy ? .copy : .move
     }
 
+    /// While dragging over our list or tree, show each file as a clean row (icon + name), like Windows.
+    static func showAsRows(_ info: NSDraggingInfo, in view: NSView, width: CGFloat, rowHeight: CGFloat) {
+        info.draggingFormation = .list
+        let size = NSSize(width: width, height: rowHeight)
+        info.enumerateDraggingItems(options: [.clearNonenumeratedImages], for: view, classes: [NSURL.self],
+                                    searchOptions: [.urlReadingFileURLsOnly: true]) { item, _, _ in
+            guard let url = (item.item as? NSURL) as URL? else { return }
+            item.draggingFrame = NSRect(origin: item.draggingFrame.origin, size: size)
+            item.imageComponentsProvider = { rowImage(for: url, size: size) }
+        }
+    }
+
+    private static func rowImage(for url: URL, size: NSSize) -> [NSDraggingImageComponent] {
+        let icon = NSDraggingImageComponent(key: .icon)
+        icon.contents = NSWorkspace.shared.icon(forFile: url.path)
+        icon.frame = NSRect(x: 4, y: (size.height - 16) / 2, width: 16, height: 16)
+
+        let name = FileManager.default.displayName(atPath: url.path)
+        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor]
+        let textSize = (name as NSString).size(withAttributes: attributes)
+        let width = min(ceil(textSize.width), size.width - 30)
+        let text = NSImage(size: NSSize(width: width, height: ceil(textSize.height)), flipped: false) { rect in
+            let style = NSMutableParagraphStyle()
+            style.lineBreakMode = .byTruncatingTail
+            var attrs = attributes
+            attrs[.paragraphStyle] = style
+            (name as NSString).draw(in: rect, withAttributes: attrs)
+            return true
+        }
+        let label = NSDraggingImageComponent(key: .label)
+        label.contents = text
+        label.frame = NSRect(x: 26, y: (size.height - text.size.height) / 2, width: text.size.width, height: text.size.height)
+        return [icon, label]
+    }
+
     static func accept(_ info: NSDraggingInfo, into folder: URL, completion: (([URL]) -> Void)? = nil) -> Bool {
         let list = urls(info)
         if !list.isEmpty {

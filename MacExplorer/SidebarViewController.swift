@@ -404,6 +404,10 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource, NS
         hoverTimer = timer
     }
 
+    func outlineView(_ outlineView: NSOutlineView, updateDraggingItemsForDrag info: NSDraggingInfo) {
+        DropRules.showAsRows(info, in: outlineView, width: min(260, outlineView.bounds.width), rowHeight: 24)
+    }
+
     func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?,
                      proposedChildIndex index: Int) -> NSDragOperation {
         guard let node = item as? TreeNode else { scheduleHoverExpand(nil); return [] }
