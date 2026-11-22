@@ -25,7 +25,7 @@ MFExplorer übernimmt den Aufbau und die Gewohnheiten des Windows Explorers: Ord
 
 ## Installation
 
-1. Unter [**Releases**](../../releases) die neueste `MFExplorer.zip` herunterladen und doppelklicken.
+1. Unter [**Releases**](../../releases) die neueste Datei `MFExplorer-<Version>.zip` herunterladen und doppelklicken.
 2. `MFExplorer.app` in den Ordner **Programme** ziehen.
 3. **Beim ersten Öffnen:** Die App ist nicht von Apple beglaubigt. macOS zeigt deshalb eine Warnung. So öffnest du sie trotzdem:
    - Doppelklicke die App und schließe die Meldung.
