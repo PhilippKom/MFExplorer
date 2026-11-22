@@ -24,6 +24,8 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - Design: Windows-Explorer-Aufbau, aber macOS-Look mit SF Symbols; keine Microsoft-Logos, -Icons oder -Namen.
 - `xcode-select` zeigt auf die Command Line Tools. Darum beim Bauen immer
   `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` voranstellen (Systemeinstellung nicht ändern).
-- Bauen:
-  `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project MacExplorer.xcodeproj -scheme MacExplorer -configuration Debug -derivedDataPath build build`
-- Starten: `open build/Build/Products/Debug/MacExplorer.app`
+- Bauen (Projekt nutzt einen automatisch synchronisierten Quellordner `MacExplorer/` – neue .swift-Dateien einfach dort ablegen):
+  `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project MacExplorer.xcodeproj -target MacExplorer -configuration Debug SYMROOT="$PWD/build" OBJROOT="$PWD/build/obj" build`
+- Starten: `open build/Debug/MacExplorer.app`
+- Selbsttest (nur Debug-Build): `open -n build/Debug/MacExplorer.app --args -startPath ~/ExplorerTest -snapshotPath <scratchpad>/bild.png [-debugReveal YES]`
+  speichert nach dem Start ein Bild des Fensters (Bildschirmaufnahme von außen ist nicht erlaubt).
