@@ -1,4 +1,4 @@
-# MacExplorer – Spezifikation
+# MFExplorer – Spezifikation
 
 Ein nativer macOS-Dateimanager im Stil des Windows-Explorers. Ziel: Umsteigern von Windows den Mac leichter machen.
 

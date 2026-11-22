@@ -17,7 +17,7 @@ final class PreviewItem: NSObject, QLPreviewItem {
 
 /// Builds an HTML page with folder facts (items, size, dates) that Quick Look can display.
 enum FolderInfoPage {
-    static let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MacExplorer-Vorschau", isDirectory: true)
+    static let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MFExplorer-Vorschau", isDirectory: true)
 
     /// Our own temporary pages from last time – safe to remove.
     static func cleanUp() {

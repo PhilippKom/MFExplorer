@@ -202,16 +202,16 @@ enum MainMenu {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser
 
-        submenu("MacExplorer", [
-            item("Über MacExplorer", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+        submenu("MFExplorer", [
+            item("Über MFExplorer", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
             sep(),
             item("Einstellungen …", #selector(AppDelegate.showSettings(_:)), ","),
             sep(),
-            item("MacExplorer ausblenden", #selector(NSApplication.hide(_:)), "h"),
+            item("MFExplorer ausblenden", #selector(NSApplication.hide(_:)), "h"),
             item("Andere ausblenden", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
             item("Alle einblenden", #selector(NSApplication.unhideAllApplications(_:))),
             sep(),
-            item("MacExplorer beenden", #selector(NSApplication.terminate(_:)), "q"),
+            item("MFExplorer beenden", #selector(NSApplication.terminate(_:)), "q"),
         ])
         let f2 = String(Character(UnicodeScalar(NSF2FunctionKey)!))
         let backspace = String(Character(UnicodeScalar(NSBackspaceCharacter)!))

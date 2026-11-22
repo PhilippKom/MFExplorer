@@ -7,12 +7,12 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		AA0000000000000000000001 /* MacExplorer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacExplorer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000001 /* MFExplorer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MFExplorer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		AA0000000000000000000002 /* MacExplorer */ = {isa = PBXFileSystemSynchronizedRootGroup; path = MacExplorer; sourceTree = "<group>"; };
+		AA0000000000000000000002 /* MFExplorer */ = {isa = PBXFileSystemSynchronizedRootGroup; path = MFExplorer; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -29,7 +29,7 @@
 		AA0000000000000000000004 = {
 			isa = PBXGroup;
 			children = (
-				AA0000000000000000000002 /* MacExplorer */,
+				AA0000000000000000000002 /* MFExplorer */,
 				AA0000000000000000000012 /* Config */,
 				AA0000000000000000000005 /* Products */,
 			);
@@ -38,7 +38,7 @@
 		AA0000000000000000000005 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				AA0000000000000000000001 /* MacExplorer.app */,
+				AA0000000000000000000001 /* MFExplorer.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -54,9 +54,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		AA0000000000000000000006 /* MacExplorer */ = {
+		AA0000000000000000000006 /* MFExplorer */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = AA0000000000000000000007 /* Build configuration list for PBXNativeTarget "MacExplorer" */;
+			buildConfigurationList = AA0000000000000000000007 /* Build configuration list for PBXNativeTarget "MFExplorer" */;
 			buildPhases = (
 				AA0000000000000000000008 /* Sources */,
 				AA0000000000000000000003 /* Frameworks */,
@@ -67,13 +67,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				AA0000000000000000000002 /* MacExplorer */,
+				AA0000000000000000000002 /* MFExplorer */,
 			);
-			name = MacExplorer;
+			name = MFExplorer;
 			packageProductDependencies = (
 			);
-			productName = MacExplorer;
-			productReference = AA0000000000000000000001 /* MacExplorer.app */;
+			productName = MFExplorer;
+			productReference = AA0000000000000000000001 /* MFExplorer.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -91,7 +91,7 @@
 					};
 				};
 			};
-			buildConfigurationList = AA000000000000000000000B /* Build configuration list for PBXProject "MacExplorer" */;
+			buildConfigurationList = AA000000000000000000000B /* Build configuration list for PBXProject "MFExplorer" */;
 			developmentRegion = de;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -105,7 +105,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				AA0000000000000000000006 /* MacExplorer */,
+				AA0000000000000000000006 /* MFExplorer */,
 			);
 		};
 /* End PBXProject section */
@@ -172,20 +172,22 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = MacExplorer;
+				INFOPLIST_KEY_CFBundleDisplayName = MFExplorer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 PhilippKom · MIT-Lizenz";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = local.macexplorer.app;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.philippkom.mfexplorer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 			};
@@ -196,20 +198,22 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = MacExplorer;
+				INFOPLIST_KEY_CFBundleDisplayName = MFExplorer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 PhilippKom · MIT-Lizenz";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = local.macexplorer.app;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.philippkom.mfexplorer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 			};
@@ -218,7 +222,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		AA0000000000000000000007 /* Build configuration list for PBXNativeTarget "MacExplorer" */ = {
+		AA0000000000000000000007 /* Build configuration list for PBXNativeTarget "MFExplorer" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AA000000000000000000000E /* Debug */,
@@ -227,7 +231,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		AA000000000000000000000B /* Build configuration list for PBXProject "MacExplorer" */ = {
+		AA000000000000000000000B /* Build configuration list for PBXProject "MFExplorer" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AA000000000000000000000C /* Debug */,

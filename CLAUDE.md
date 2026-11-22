@@ -1,4 +1,4 @@
-# CLAUDE.md – Arbeitsregeln für MacExplorer
+# CLAUDE.md – Arbeitsregeln für MFExplorer
 
 Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 
@@ -24,18 +24,18 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - Design: Windows-Explorer-Aufbau, aber macOS-Look mit SF Symbols; keine Microsoft-Logos, -Icons oder -Namen.
 - `xcode-select` zeigt auf die Command Line Tools. Darum beim Bauen immer
   `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` voranstellen (Systemeinstellung nicht ändern).
-- Bauen (Projekt nutzt einen automatisch synchronisierten Quellordner `MacExplorer/` – neue .swift-Dateien einfach dort ablegen):
-  `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project MacExplorer.xcodeproj -target MacExplorer -configuration Debug SYMROOT="$PWD/build" OBJROOT="$PWD/build/obj" build`
-- Starten: `open build/Debug/MacExplorer.app`
-- Selbsttest (nur Debug-Build): `open -n build/Debug/MacExplorer.app --args -startPath ~/ExplorerTest -snapshotPath <scratchpad>/bild.png [-debugReveal YES]`
+- Bauen (Projekt nutzt einen automatisch synchronisierten Quellordner `MFExplorer/` – neue .swift-Dateien einfach dort ablegen):
+  `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project MFExplorer.xcodeproj -target MFExplorer -configuration Debug SYMROOT="$PWD/build" OBJROOT="$PWD/build/obj" build`
+- Starten: `open build/Debug/MFExplorer.app`
+- Selbsttest (nur Debug-Build): `open -n build/Debug/MFExplorer.app --args -startPath ~/ExplorerTest -snapshotPath <scratchpad>/bild.png [-debugReveal YES]`
   speichert nach dem Start ein Bild des Fensters (Bildschirmaufnahme von außen ist nicht erlaubt).
   Weitere Test-Argumente: `-debugSelect <Name>`, `-debugSearch <Text>`, `-debugSettings YES`, `-debugSnapDelay <Sek.>`, `-defaultViewMode large`, `-showPreviewPane YES`.
   Inhalte, die macOS in einem eigenen Prozess zeichnet (Bild-/HTML-Vorschau), erscheinen auf diesen Bildern leer.
 - Selbsttest der Dateioperationen (nur Debug-Build, arbeitet nur in `~/ExplorerTest/_selftest`):
-  `open -n build/Debug/MacExplorer.app --args -selfTest <scratchpad>/selftest.log`
-- Such-Test (wartet bis die Suche fertig ist, schreibt Treffer + Fundstelle): `open -n build/Debug/MacExplorer.app --args -startPath ~/ExplorerTest/Inhaltstest -searchContent YES -searchTestWord Umsatz -searchTest <scratchpad>/search.log`
-- Tab-Test (öffnet 3 Tabs, schließt einen, prüft dass die App weiterläuft): `open -n build/Debug/MacExplorer.app --args -tabTest <scratchpad>/tabtest.log`
-- Absturzprotokolle: `~/Library/Logs/DiagnosticReports/MacExplorer-*.ips`. QLPreviewView nie selbst `close()` aufrufen (schließt sich mit dem Fenster). – schreibt PASS/FAIL ins Protokoll und beendet sich. Nach Änderungen an `FileOperations.swift` immer laufen lassen.
+  `open -n build/Debug/MFExplorer.app --args -selfTest <scratchpad>/selftest.log`
+- Such-Test (wartet bis die Suche fertig ist, schreibt Treffer + Fundstelle): `open -n build/Debug/MFExplorer.app --args -startPath ~/ExplorerTest/Inhaltstest -searchContent YES -searchTestWord Umsatz -searchTest <scratchpad>/search.log`
+- Tab-Test (öffnet 3 Tabs, schließt einen, prüft dass die App weiterläuft): `open -n build/Debug/MFExplorer.app --args -tabTest <scratchpad>/tabtest.log`
+- Absturzprotokolle: `~/Library/Logs/DiagnosticReports/MFExplorer-*.ips`. QLPreviewView nie selbst `close()` aufrufen (schließt sich mit dem Fenster). – schreibt PASS/FAIL ins Protokoll und beendet sich. Nach Änderungen an `FileOperations.swift` immer laufen lassen.
 
 ## Aufbau des Codes
 - `FileOperations.swift`: alle Änderungen am Dateisystem (Kopieren/Verschieben mit Konfliktdialog und Fortschritt, Papierkorb, Umbenennen, ZIP, Tags), Undo, Zwischenablage, Drag-&-Drop-Regeln.

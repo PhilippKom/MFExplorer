@@ -1,8 +1,8 @@
 import AppKit
 
 extension Notification.Name {
-    static let settingsChanged = Notification.Name("MacExplorer.settingsChanged")
-    static let favoritesChanged = Notification.Name("MacExplorer.favoritesChanged")
+    static let settingsChanged = Notification.Name("MFExplorer.settingsChanged")
+    static let favoritesChanged = Notification.Name("MFExplorer.favoritesChanged")
 }
 
 /// App settings, stored in UserDefaults. Every change is broadcast so all windows update.

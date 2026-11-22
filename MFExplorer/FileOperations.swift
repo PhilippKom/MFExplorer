@@ -1,9 +1,9 @@
 import AppKit
 
 extension Notification.Name {
-    static let clipboardChanged = Notification.Name("MacExplorer.clipboardChanged")
+    static let clipboardChanged = Notification.Name("MFExplorer.clipboardChanged")
     /// Posted after every file operation, undo and redo (the tree refreshes itself).
-    static let filesChanged = Notification.Name("MacExplorer.filesChanged")
+    static let filesChanged = Notification.Name("MFExplorer.filesChanged")
 }
 
 /// What a file operation changed. Undo only ever moves things back or puts them into the Trash —
@@ -513,7 +513,7 @@ final class FileOps {
 
     func extract(_ zip: URL, completion: ((URL) -> Void)? = nil) {
         let folder = zip.deletingLastPathComponent()
-        let temp = folder.appendingPathComponent(".MacExplorer-Entpacken-\(UUID().uuidString)")
+        let temp = folder.appendingPathComponent(".MFExplorer-Entpacken-\(UUID().uuidString)")
         do { try fm.createDirectory(at: temp, withIntermediateDirectories: false) } catch {
             Self.showErrors("Entpacken nicht möglich", [error.localizedDescription]); return
         }

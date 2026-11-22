@@ -86,7 +86,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         window.center()
         window.setFrameAutosaveName("MainWindow")
         window.initialFirstResponder = fileListVC.activeView
-        window.tabbingIdentifier = "MacExplorerMain"
+        window.tabbingIdentifier = "MFExplorerMain"
         window.tabbingMode = .automatic
 
         sidebarVC.delegate = self

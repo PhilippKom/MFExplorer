@@ -2,7 +2,7 @@
 import AppKit
 
 /// Automatic test of the file operations. Only in debug builds, and only inside ~/ExplorerTest/_selftest.
-/// Start with: open -n build/Debug/MacExplorer.app --args -selfTest <logfile>
+/// Start with: open -n build/Debug/MFExplorer.app --args -selfTest <logfile>
 final class DebugSelfTest {
     private let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("ExplorerTest/_selftest")
     private let fm = FileManager.default
@@ -111,7 +111,7 @@ final class DebugSelfTest {
         step("extract") { next in
             self.ops.extract(self.url("A.zip")) { result in
                 self.check("extract: 'A (2)' with content (\(result.lastPathComponent))", self.exists("A (2)/file.txt"))
-                self.check("extract: no temp folder left", ((try? self.fm.contentsOfDirectory(atPath: self.root.path)) ?? []).allSatisfy { !$0.hasPrefix(".MacExplorer") })
+                self.check("extract: no temp folder left", ((try? self.fm.contentsOfDirectory(atPath: self.root.path)) ?? []).allSatisfy { !$0.hasPrefix(".MFExplorer") })
                 next()
             }
         }
