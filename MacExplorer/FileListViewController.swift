@@ -29,7 +29,7 @@ final class FileTableView: NSTableView {
         super.keyDown(with: event)
     }
 
-    /// Like Windows: dragging starts only on the icon or the name. Anywhere else draws a selection rectangle.
+    /// Dragging starts on the icon or the name, or anywhere on an already selected row. Elsewhere: selection rectangle.
     private func isOnName(_ point: NSPoint, row: Int) -> Bool {
         guard row >= 0 else { return false }
         let col = column(withIdentifier: NSUserInterfaceItemIdentifier("name"))
@@ -46,7 +46,10 @@ final class FileTableView: NSTableView {
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let row = self.row(at: point)
-        if event.clickCount > 1 || isOnName(point, row: row) {
+        let mods = event.modifierFlags.intersection([.command, .shift])
+        // Like Windows: an already selected row can be dragged from anywhere, and the whole selection moves.
+        let onSelectedRow = row >= 0 && selectedRowIndexes.contains(row) && mods.isEmpty
+        if event.clickCount > 1 || onSelectedRow || isOnName(point, row: row) {
             super.mouseDown(with: event)
             return
         }
