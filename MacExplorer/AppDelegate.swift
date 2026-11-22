@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         #if DEBUG
         scheduleDebugSnapshot()
+        if let path = UserDefaults.standard.string(forKey: "tabTest") { runTabTest(log: path) }
         if let path = UserDefaults.standard.string(forKey: "selfTest") {
             selfTest = DebugSelfTest(logPath: path)
             selfTest?.run()
@@ -31,6 +32,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     #if DEBUG
     private var selfTest: DebugSelfTest?
+
+    /// Test: open 3 tabs, close one, check that the app and the other 2 tabs are still there.
+    private func runTabTest(log path: String) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self, let first = self.windowControllers.first else { return }
+            first.newWindowForTab(nil)
+            first.newWindowForTab(nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                let before = self.windowControllers.count
+                self.windowControllers.last?.window?.performClose(nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    let after = self.windowControllers.count
+                    let tabs = self.windowControllers.first?.window?.tabbedWindows?.count ?? 1
+                    let ok = before == 3 && after == 2
+                    try? "\(ok ? "PASS" : "FAIL") tabs before=\(before) after=\(after) tabGroup=\(tabs)".write(toFile: path, atomically: true, encoding: .utf8)
+                    NSApp.terminate(nil)
+                }
+            }
+        }
+    }
 
     /// Test helper: `-snapshotPath <file.png>` saves a picture of the window after launch.
     /// `-debugReveal YES` presses "Im Baum zeigen" first. Only in debug builds.

@@ -32,7 +32,9 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
   Weitere Test-Argumente: `-debugSelect <Name>`, `-debugSearch <Text>`, `-debugSettings YES`, `-debugSnapDelay <Sek.>`, `-defaultViewMode large`, `-showPreviewPane YES`.
   Inhalte, die macOS in einem eigenen Prozess zeichnet (Bild-/HTML-Vorschau), erscheinen auf diesen Bildern leer.
 - Selbsttest der Dateioperationen (nur Debug-Build, arbeitet nur in `~/ExplorerTest/_selftest`):
-  `open -n build/Debug/MacExplorer.app --args -selfTest <scratchpad>/selftest.log` – schreibt PASS/FAIL ins Protokoll und beendet sich. Nach Änderungen an `FileOperations.swift` immer laufen lassen.
+  `open -n build/Debug/MacExplorer.app --args -selfTest <scratchpad>/selftest.log`
+- Tab-Test (öffnet 3 Tabs, schließt einen, prüft dass die App weiterläuft): `open -n build/Debug/MacExplorer.app --args -tabTest <scratchpad>/tabtest.log`
+- Absturzprotokolle: `~/Library/Logs/DiagnosticReports/MacExplorer-*.ips`. QLPreviewView nie selbst `close()` aufrufen (schließt sich mit dem Fenster). – schreibt PASS/FAIL ins Protokoll und beendet sich. Nach Änderungen an `FileOperations.swift` immer laufen lassen.
 
 ## Aufbau des Codes
 - `FileOperations.swift`: alle Änderungen am Dateisystem (Kopieren/Verschieben mit Konfliktdialog und Fortschritt, Papierkorb, Umbenennen, ZIP, Tags), Undo, Zwischenablage, Drag-&-Drop-Regeln.

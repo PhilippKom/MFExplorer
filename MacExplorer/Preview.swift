@@ -206,9 +206,8 @@ final class PreviewPaneViewController: NSViewController {
         showMessage("Wähle eine Datei aus, um hier eine Vorschau zu sehen.")
     }
 
-    deinit {
-        previewView?.close()
-    }
+    // No close() here: QLPreviewView closes itself with its window (shouldCloseWithWindow).
+    // Closing it a second time makes Quick Look abort the whole app.
 
     /// Called whenever the selection changes. Waits a moment so fast arrow-key scrolling stays smooth.
     func show(_ urls: [URL]) {
