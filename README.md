@@ -38,16 +38,21 @@ MFExplorer übernimmt den Aufbau und die Gewohnheiten des Windows Explorers: Ord
 
 **Zugriff auf Ordner:** Beim ersten Öffnen von Schreibtisch, Dokumenten oder Downloads fragt macOS nach einer Erlaubnis. Für alle Ordner auf einmal kannst du MFExplorer unter *Systemeinstellungen → Datenschutz & Sicherheit → Festplattenvollzugriff* freigeben.
 
+## Updates
+
+Ab Version 1.1 sucht MFExplorer selbst nach neuen Versionen. Dafür nutzt die App [Sparkle](https://sparkle-project.org), den Standard für Mac-Apps außerhalb des App Stores. Gibt es ein Update, fragt die App, ob sie es installieren soll. Updates sind digital unterschrieben, gefälschte Updates werden abgelehnt.
+Du kannst auch selbst suchen: **MFExplorer → Nach Updates suchen …**. Die automatische Suche lässt sich in den Einstellungen abschalten.
+
 ## Datenschutz
 
-MFExplorer sammelt keine Daten, hat keine Werbung und baut keine Verbindung ins Internet auf.
+MFExplorer sammelt keine Daten und hat keine Werbung. Die einzige Internetverbindung ist die Update-Suche. Dabei lädt die App einmal täglich die Datei `appcast.xml` aus diesem GitHub-Projekt, oder wenn du selbst suchst. Persönliche Daten werden dabei nicht gesendet.
 
 ## Selbst bauen
 
 Dafür brauchst du Xcode 27 oder neuer.
 
 ```bash
-xcodebuild -project MFExplorer.xcodeproj -target MFExplorer -configuration Release SYMROOT="$PWD/build" build
+xcodebuild -project MFExplorer.xcodeproj -target MFExplorer -configuration Release SYMROOT="$PWD/build" -clonedSourcePackagesDirPath "$PWD/build/SourcePackages" build
 open build/Release/MFExplorer.app
 ```
 

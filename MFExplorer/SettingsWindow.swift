@@ -54,6 +54,18 @@ struct SettingsView: View {
                 Text("Die Entf-Taste (fn + ⌫) legt immer in den Papierkorb.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            if let updater = AppDelegate.updater {
+                Section("Updates") {
+                    Toggle("Automatisch nach Updates suchen (einmal täglich)",
+                           isOn: binding({ updater.automaticallyChecksForUpdates }, { updater.automaticallyChecksForUpdates = $0 }))
+                    HStack {
+                        Text("Fragt bei GitHub nach einer neuen Version. Es werden keine persönlichen Daten gesendet.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Jetzt suchen") { (NSApp.delegate as? AppDelegate)?.checkForUpdates(nil) }
+                    }
+                }
+            }
             Section("Tastenkürzel") {
                 Toggle("Windows-Kürzel mit ctrl (Strg) zusätzlich aktivieren", isOn: binding({ s.windowsShortcuts }, { s.windowsShortcuts = $0 }))
                 Text("ctrl+C/X/V kopieren, ausschneiden, einfügen · ctrl+Z/Y rückgängig/wiederholen · ctrl+A alles · ctrl+F suchen · ctrl+L Adresse · ctrl+T neuer Tab · ctrl+W Tab schließen · ctrl+N neues Fenster · ctrl+⇧+N neuer Ordner · ctrl+D löschen. Die ⌘-Kürzel funktionieren weiterhin.")

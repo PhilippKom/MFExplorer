@@ -25,7 +25,7 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - `xcode-select` zeigt auf die Command Line Tools. Darum beim Bauen immer
   `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` voranstellen (Systemeinstellung nicht ändern).
 - Bauen (Projekt nutzt einen automatisch synchronisierten Quellordner `MFExplorer/` – neue .swift-Dateien einfach dort ablegen):
-  `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project MFExplorer.xcodeproj -target MFExplorer -configuration Debug SYMROOT="$PWD/build" OBJROOT="$PWD/build/obj" build`
+  `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project MFExplorer.xcodeproj -target MFExplorer -configuration Debug SYMROOT="$PWD/build" OBJROOT="$PWD/build/obj" -clonedSourcePackagesDirPath "$PWD/build/SourcePackages" build`
 - Starten: `open build/Debug/MFExplorer.app`
 - Selbsttest (nur Debug-Build): `open -n build/Debug/MFExplorer.app --args -startPath ~/ExplorerTest -snapshotPath <scratchpad>/bild.png [-debugReveal YES]`
   speichert nach dem Start ein Bild des Fensters (Bildschirmaufnahme von außen ist nicht erlaubt).
@@ -47,3 +47,9 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - Tabs sind native macOS-Fenster-Tabs (jeder Tab = ein `MainWindowController`).
 - `ContentSearch.swift`: Inhaltssuche über den Spotlight-Index (NSMetadataQuery) und die Zeile für die Spalte „Fundstelle“.
 - Gleichnamige Ordner werden beim Kopieren/Verschieben zusammengeführt (`FileOps.plan`), danach Hinweis.
+
+## Updates und Veröffentlichung (Sparkle)
+- Sparkle 2 kommt als Swift-Paket (`build/SourcePackages`). Feed: `appcast.xml` im Repo (über raw.githubusercontent.com). Öffentlicher Schlüssel in `Config/Info.plist`, der private liegt im Schlüsselbund unter dem Konto `mfexplorer`.
+- In Debug-Builds startet der Updater nicht (keine Update-Dialoge bei Tests).
+- Neue Version veröffentlichen, nur mit ausdrücklichem OK des Nutzers: `Tools/release.sh <Version> <notizen.md>`. Das Skript erhöht die Build-Nummer, baut, unterschreibt, erstellt das GitHub-Release und ergänzt danach `appcast.xml`.
+- Git-Absender in diesem Repo: `PhilippKom <72168776+PhilippKom@users.noreply.github.com>`. Niemals die private E-Mail-Adresse verwenden.

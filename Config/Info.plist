@@ -4,5 +4,11 @@
 <dict>
 	<key>CFBundleAllowMixedLocalizations</key>
 	<true/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/PhilippKom/MFExplorer/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>ZQWawzPNvwumYs2SiIHoktH4HYHZ1g7NfPW9F1uOLSU=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>

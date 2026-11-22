@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -15,8 +16,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var windowControllers: [MainWindowController] = []
 
+    /// Sparkle: checks the appcast on GitHub for new versions and installs them.
+    /// Not started in debug builds, so test runs never show update dialogs.
+    private lazy var updaterController: SPUStandardUpdaterController = {
+        #if DEBUG
+        let start = false
+        #else
+        let start = true
+        #endif
+        return SPUStandardUpdaterController(startingUpdater: start, updaterDelegate: nil, userDriverDelegate: nil)
+    }()
+
+    static var updater: SPUUpdater? { instance?.updaterController.updater }
+
+    @objc func checkForUpdates(_ sender: Any?) {
+        updaterController.checkForUpdates(sender)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         FolderInfoPage.cleanUp()
+        _ = updaterController
         NSApp.mainMenu = MainMenu.build()
         openWindow(at: startURL())
         NSApp.activate(ignoringOtherApps: true)
@@ -208,6 +227,7 @@ enum MainMenu {
 
         submenu("MFExplorer", [
             item("Über MFExplorer", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+            item("Nach Updates suchen …", #selector(AppDelegate.checkForUpdates(_:))),
             sep(),
             item("Einstellungen …", #selector(AppDelegate.showSettings(_:)), ","),
             sep(),
