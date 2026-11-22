@@ -1,5 +1,6 @@
 import AppKit
 import Sparkle
+import Quartz
 
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -34,7 +35,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        FolderInfoPage.cleanUp()
         _ = updaterController
         NSApp.mainMenu = MainMenu.build()
         openWindow(at: startURL())
@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         scheduleDebugSnapshot()
         if let path = UserDefaults.standard.string(forKey: "tabTest") { runTabTest(log: path) }
+        if let path = UserDefaults.standard.string(forKey: "spaceTest") { runSpaceTest(log: path) }
         if let path = UserDefaults.standard.string(forKey: "searchTest") { runSearchTest(log: path) }
         if let path = UserDefaults.standard.string(forKey: "selfTest") {
             selfTest = DebugSelfTest(logPath: path)
@@ -96,6 +97,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             poll()
+        }
+    }
+
+    /// Test: space bar on a folder → own info window (picture saved), on a file → Quick Look, space again → closed.
+    private func runSpaceTest(log path: String) {
+        let picture = (path as NSString).deletingPathExtension + ".png"
+        var lines: [String] = []
+        func folderPanel() -> NSWindow? { NSApp.windows.first { $0 is FolderInfoPanel && $0.isVisible } }
+        func quickLookVisible() -> Bool { QLPreviewPanel.sharedPreviewPanelExists() && (QLPreviewPanel.shared()?.isVisible ?? false) }
+        func check(_ name: String, _ ok: Bool) { lines.append((ok ? "PASS " : "FAIL ") + name) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let controller = self?.windowControllers.first else { return }
+            let root = controller.currentURL
+            controller.fileListVC.load(root, select: [root.appendingPathComponent("Projekte")])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                controller.toggleQuickLook(nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    let panel = folderPanel()
+                    check("Ordner → Info-Fenster offen (\(panel?.title ?? "-"))", panel != nil)
+                    check("Ordner → keine Schnellansicht", !quickLookVisible())
+                    if let view = panel?.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                        view.cacheDisplay(in: view.bounds, to: rep)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: picture))
+                    }
+                    controller.fileListVC.load(root, select: [root.appendingPathComponent("Notiz.txt")])
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        check("Datei → Info-Fenster zu", folderPanel() == nil)
+                        check("Datei → Schnellansicht offen", quickLookVisible())
+                        controller.toggleQuickLook(nil)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            check("Leertaste → alles zu", folderPanel() == nil && !quickLookVisible())
+                            try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+                            NSApp.terminate(nil)
+                        }
+                    }
+                }
+            }
         }
     }
 

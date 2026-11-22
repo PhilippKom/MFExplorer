@@ -55,6 +55,15 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     private var quickLookItems: [PreviewItem] = []
     private let quickLookBuilder = PreviewBuilder()
     private var quickLookActive = false
+    private lazy var folderInfo: FolderInfoPanelController = {
+        let controller = FolderInfoPanelController()
+        controller.onArrow = { [weak self] event in self?.fileListVC.activeView.keyDown(with: event) }
+        controller.onClose = { [weak self] in
+            guard let self, !self.quickLookVisible else { return }
+            self.window?.makeKeyAndOrderFront(nil)
+        }
+        return controller
+    }()
     private let addressBar = AddressBarView()
     private var commandBar: CommandBarView!
     private let statusBar = StatusBarView()
@@ -162,6 +171,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     // MARK: - Window
 
     func windowWillClose(_ notification: Notification) {
+        folderInfo.close()
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
         onClose?()
@@ -287,10 +297,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     private func updatePreview() {
         let urls = context(nil).urls
         if !previewSplitItem.isCollapsed { previewVC.show(urls) }
-        if quickLookActive, let panel = QLPreviewPanel.shared(), panel.isVisible {
-            quickLookItems = makeQuickLookItems()
-            panel.reloadData()
-        }
+        if folderInfo.isVisible || (quickLookActive && quickLookVisible) { showPreviewWindow() }
     }
 
     #if DEBUG
@@ -309,21 +316,49 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         commandBar.setPreviewVisible(show)
     }
 
+    private var previewTargets: [URL] {
+        let urls = context(nil).urls
+        return urls.isEmpty ? [currentURL] : urls
+    }
+
+    private var quickLookVisible: Bool {
+        QLPreviewPanel.sharedPreviewPanelExists() && (QLPreviewPanel.shared()?.isVisible ?? false)
+    }
+
     private func makeQuickLookItems() -> [PreviewItem] {
-        let ctx = context(nil)
-        let urls = ctx.urls.isEmpty ? [currentURL] : ctx.urls
-        return quickLookBuilder.items(for: urls) { item in
-            guard let panel = QLPreviewPanel.shared(), panel.isVisible, panel.currentPreviewItem === item else { return }
-            panel.refreshCurrentPreviewItem()
+        quickLookBuilder.items(for: previewTargets)
+    }
+
+    /// Space bar: open / close the preview (like Finder).
+    /// One folder → our folder info window (items, size, dates); otherwise → Quick Look.
+    @objc func toggleQuickLook(_ sender: Any?) {
+        if folderInfo.isVisible {
+            folderInfo.close()
+        } else if quickLookVisible {
+            QLPreviewPanel.shared()?.orderOut(nil)
+        } else {
+            showPreviewWindow()
         }
     }
 
-    /// Space bar: open / close Quick Look (like Finder). Folders show item count, size and dates.
-    @objc func toggleQuickLook(_ sender: Any?) {
+    /// Shows the right preview window for the current selection (also called when the selection changes).
+    private func showPreviewWindow() {
+        let urls = previewTargets
+        if urls.count == 1, DirectoryReader.isDirectory(urls[0]), FileOps.shared.isPlainFolder(urls[0]) {
+            if quickLookVisible { QLPreviewPanel.shared()?.orderOut(nil) }
+            folderInfo.show(urls[0], over: window)
+            return
+        }
+        if folderInfo.isVisible {
+            folderInfo.close()
+            window?.makeKeyAndOrderFront(nil)
+        }
         guard let panel = QLPreviewPanel.shared() else { return }
-        if QLPreviewPanel.sharedPreviewPanelExists() && panel.isVisible {
-            panel.orderOut(nil)
+        if panel.isVisible {
+            quickLookItems = makeQuickLookItems()
+            panel.reloadData()
         } else {
+            window?.makeKeyAndOrderFront(nil)   // Quick Look finds its data source via the key window
             panel.makeKeyAndOrderFront(nil)
         }
     }

@@ -15,101 +15,12 @@ final class PreviewItem: NSObject, QLPreviewItem {
     }
 }
 
-/// Builds an HTML page with folder facts (items, size, dates) that Quick Look can display.
-enum FolderInfoPage {
-    static let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MFExplorer-Vorschau", isDirectory: true)
-
-    /// Our own temporary pages from last time – safe to remove.
-    static func cleanUp() {
-        try? FileManager.default.removeItem(at: directory)
-    }
-
-    private static func escape(_ s: String) -> String {
-        s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
-    }
-
-    private static func iconData(_ url: URL) -> String {
-        let icon = NSWorkspace.shared.icon(forFile: url.path)
-        let rect = NSRect(x: 0, y: 0, width: 128, height: 128)
-        guard let rep = icon.bestRepresentation(for: rect, context: nil, hints: nil) else { return "" }
-        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 128, pixelsHigh: 128, bitsPerSample: 8,
-                                      samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
-                                      bytesPerRow: 0, bitsPerPixel: 0)
-        guard let bitmap else { return "" }
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
-        rep.draw(in: rect)
-        NSGraphicsContext.restoreGraphicsState()
-        return bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? ""
-    }
-
-    static func write(folder: URL, stats: FolderStats?) -> URL {
-        let fm = FileManager.default
-        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
-        let v = try? folder.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
-        let direct = (try? DirectoryReader.contents(of: folder, includeHidden: Settings.shared.showHiddenFiles))?.count
-        func row(_ label: String, _ value: String) -> String {
-            "<tr><td class=l>\(escape(label))</td><td>\(escape(value))</td></tr>"
-        }
-        var rows = row("Ort", folder.deletingLastPathComponent().path)
-        rows += row("Elemente darin", direct.map { $0 == 1 ? "1 Element" : "\($0) Elemente" } ?? "kein Zugriff")
-        if let stats {
-            rows += row("Insgesamt", "\(stats.files) Dateien, \(stats.folders) Ordner")
-            rows += row("Größe", "\(Format.size(stats.bytes)) (\(stats.bytes.formatted()) Bytes)")
-            rows += row("Auf Datenträger", Format.size(stats.allocated))
-        } else {
-            rows += row("Größe", "Wird berechnet …")
-        }
-        rows += row("Erstellt", Format.date(v?.creationDate))
-        rows += row("Geändert", Format.date(v?.contentModificationDate))
-
-        let html = """
-        <!doctype html><html><head><meta charset="utf-8"><style>
-        :root { color-scheme: light dark; }
-        body { font: 13px -apple-system, sans-serif; margin: 0; padding: 32px 24px; text-align: center;
-               background: Canvas; color: CanvasText; }
-        img { width: 128px; height: 128px; }
-        h1 { font-size: 20px; font-weight: 600; margin: 8px 0 20px; word-break: break-word; }
-        table { margin: 0 auto; border-collapse: collapse; text-align: left; }
-        td { padding: 4px 8px; vertical-align: top; word-break: break-word; }
-        td.l { color: GrayText; text-align: right; white-space: nowrap; }
-        </style></head><body>
-        <img src="data:image/png;base64,\(iconData(folder))">
-        <h1>\(escape(fm.displayName(atPath: folder.path)))</h1>
-        <table>\(rows)</table>
-        </body></html>
-        """
-        // A new file each time, so Quick Look never shows an old cached version.
-        let file = directory.appendingPathComponent(UUID().uuidString + ".html")
-        try? html.write(to: file, atomically: true, encoding: .utf8)
-        return file
-    }
-}
-
-/// Turns URLs into preview items; folder sizes are computed in the background and then refreshed.
+/// Turns URLs into Quick Look items. (Folders are shown in our own FolderInfoPanel, not in Quick Look.)
 final class PreviewBuilder {
-    private var generation = 0
+    func cancel() {}
 
-    func cancel() { generation += 1 }
-
-    func items(for urls: [URL], onUpdate: @escaping (PreviewItem) -> Void) -> [PreviewItem] {
-        generation += 1
-        let current = generation
-        return urls.map { url in
-            let isFolder = DirectoryReader.isDirectory(url) && FileOps.shared.isPlainFolder(url)
-            guard isFolder else { return PreviewItem(source: url, url: url, title: nil) }
-            let title = FileManager.default.displayName(atPath: url.path)
-            let item = PreviewItem(source: url, url: FolderInfoPage.write(folder: url, stats: nil), title: title)
-            DispatchQueue.global(qos: .utility).async { [weak self] in
-                let stats = FolderStats.compute([url]) { self?.generation != current }
-                DispatchQueue.main.async {
-                    guard let self, self.generation == current else { return }
-                    item.previewItemURL = FolderInfoPage.write(folder: url, stats: stats)
-                    onUpdate(item)
-                }
-            }
-            return item
-        }
+    func items(for urls: [URL], onUpdate: @escaping (PreviewItem) -> Void = { _ in }) -> [PreviewItem] {
+        urls.map { PreviewItem(source: $0, url: $0, title: nil) }
     }
 }
 
@@ -284,5 +195,88 @@ final class PreviewPaneViewController: NSViewController {
         message.isHidden = true
         previewView.isHidden = false
         previewView.previewItem = items.first
+    }
+}
+
+// MARK: - Folder info window (space bar on a folder)
+
+/// Panel that closes with space / Esc and passes ↑/↓ on, like Quick Look.
+final class FolderInfoPanel: NSPanel {
+    var onKey: ((NSEvent) -> Bool)?
+    override var canBecomeKey: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        if onKey?(event) == true { return }
+        super.keyDown(with: event)
+    }
+}
+
+/// Shows folder facts (items, size, dates) in a small window – without Quick Look's "Öffnen mit"/"Teilen" buttons.
+final class FolderInfoPanelController: NSObject, NSWindowDelegate {
+    private var panel: FolderInfoPanel?
+    private var model: FolderInfoModel?
+    private(set) var folder: URL?
+    /// ↑/↓ pressed in the panel: move the selection in the main window.
+    var onArrow: ((NSEvent) -> Void)?
+    /// The panel was closed: give the focus back to the main window.
+    var onClose: (() -> Void)?
+
+    var isVisible: Bool { panel?.isVisible ?? false }
+
+    func show(_ url: URL, over parent: NSWindow?) {
+        if url == folder, isVisible { return }
+        model?.cancel()
+        let model = FolderInfoModel(url: url)
+        self.model = model
+        folder = url
+        let panel = self.panel ?? makePanel()
+        let hosting = NSHostingView(rootView: FolderInfoView(model: model))
+        hosting.frame = NSRect(x: 0, y: 0, width: 440, height: 400)
+        panel.contentView = hosting
+        panel.title = FileManager.default.displayName(atPath: url.path)
+        if !panel.isVisible {
+            if let parent {
+                let frame = parent.frame
+                panel.setFrameOrigin(NSPoint(x: frame.midX - panel.frame.width / 2, y: frame.midY - panel.frame.height / 2))
+            } else {
+                panel.center()
+            }
+            panel.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    func close() {
+        guard isVisible else { return }
+        panel?.close()   // → windowWillClose
+    }
+
+    private func makePanel() -> FolderInfoPanel {
+        let panel = FolderInfoPanel(contentRect: NSRect(x: 0, y: 0, width: 440, height: 400),
+                                    styleMask: [.titled, .closable, .resizable, .utilityWindow], backing: .buffered, defer: false)
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+        panel.isReleasedWhenClosed = false
+        panel.delegate = self
+        panel.onKey = { [weak self] event in
+            switch event.keyCode {
+            case 49, 53:   // space, Esc
+                self?.close()
+                return true
+            case 125, 126:   // ↓ ↑
+                self?.onArrow?(event)
+                return true
+            default:
+                return false
+            }
+        }
+        self.panel = panel
+        return panel
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        model?.cancel()
+        model = nil
+        folder = nil
+        DispatchQueue.main.async { [weak self] in self?.onClose?() }
     }
 }
