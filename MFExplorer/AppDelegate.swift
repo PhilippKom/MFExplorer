@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         scheduleDebugSnapshot()
         if let path = UserDefaults.standard.string(forKey: "tabTest") { runTabTest(log: path) }
         if let path = UserDefaults.standard.string(forKey: "spaceTest") { runSpaceTest(log: path) }
+        if let path = UserDefaults.standard.string(forKey: "closeTest") { runCloseTest(log: path) }
         if let path = UserDefaults.standard.string(forKey: "searchTest") { runSearchTest(log: path) }
         if let path = UserDefaults.standard.string(forKey: "selfTest") {
             selfTest = DebugSelfTest(logPath: path)
@@ -100,36 +101,116 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Test: space bar on a folder → own info window (picture saved), on a file → Quick Look, space again → closed.
+    // MARK: Preview window tests
+
+    private func previewPanels() -> [NSWindow] { NSApp.windows.filter { $0 is QuickLookPanel && $0.isVisible } }
+    private func systemQuickLookOpen() -> Bool { QLPreviewPanel.sharedPreviewPanelExists() && (QLPreviewPanel.shared()?.isVisible ?? false) }
+
+    private func sendKey(_ code: UInt16, to window: NSWindow?) {
+        let chars: String
+        switch code {
+        case 125: chars = String(Character(UnicodeScalar(NSDownArrowFunctionKey)!))
+        case 126: chars = String(Character(UnicodeScalar(NSUpArrowFunctionKey)!))
+        case 123: chars = String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!))
+        case 124: chars = String(Character(UnicodeScalar(NSRightArrowFunctionKey)!))
+        case 53: chars = "\u{1b}"
+        default: chars = " "
+        }
+        let mods: NSEvent.ModifierFlags = (123...126).contains(code) ? [.numericPad, .function] : []
+        guard let window, let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: mods, timestamp: 0,
+                                                       windowNumber: window.windowNumber, context: nil, characters: chars,
+                                                       charactersIgnoringModifiers: chars, isARepeat: false, keyCode: code) else { return }
+        window.sendEvent(event)
+    }
+
+    private func after(_ delay: Double, _ body: @escaping () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: body)
+    }
+
+    /// Test: space on a folder → info (picture saved), on a file → file preview, space again → closed.
     private func runSpaceTest(log path: String) {
         let picture = (path as NSString).deletingPathExtension + ".png"
         var lines: [String] = []
-        func folderPanel() -> NSWindow? { NSApp.windows.first { $0 is FolderInfoPanel && $0.isVisible } }
-        func quickLookVisible() -> Bool { QLPreviewPanel.sharedPreviewPanelExists() && (QLPreviewPanel.shared()?.isVisible ?? false) }
         func check(_ name: String, _ ok: Bool) { lines.append((ok ? "PASS " : "FAIL ") + name) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            guard let controller = self?.windowControllers.first else { return }
+        after(1.5) { [weak self] in
+            guard let self, let controller = self.windowControllers.first else { return }
             let root = controller.currentURL
+            let ql = controller.debugQuickLook
             controller.fileListVC.load(root, select: [root.appendingPathComponent("Projekte")])
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            self.after(1) {
                 controller.toggleQuickLook(nil)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                    let panel = folderPanel()
-                    check("Ordner → Info-Fenster offen (\(panel?.title ?? "-"))", panel != nil)
-                    check("Ordner → keine Schnellansicht", !quickLookVisible())
-                    if let view = panel?.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                self.after(2.5) {
+                    check("Ordner → Vorschaufenster mit Ordner-Infos (\(self.previewPanels().first?.title ?? "-"))", self.previewPanels().count == 1 && ql.showsFolder)
+                    if let view = self.previewPanels().first?.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
                         view.cacheDisplay(in: view.bounds, to: rep)
                         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: picture))
                     }
                     controller.fileListVC.load(root, select: [root.appendingPathComponent("Notiz.txt")])
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        check("Datei → Info-Fenster zu", folderPanel() == nil)
-                        check("Datei → Schnellansicht offen", quickLookVisible())
+                    self.after(2) {
+                        check("Datei → dasselbe Fenster zeigt die Datei", self.previewPanels().count == 1 && !ql.showsFolder && ql.currentURL?.lastPathComponent == "Notiz.txt")
                         controller.toggleQuickLook(nil)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            check("Leertaste → alles zu", folderPanel() == nil && !quickLookVisible())
+                        self.after(1.5) {
+                            check("Leertaste → zu", self.previewPanels().isEmpty)
+                            check("macOS-Schnellansicht nie geöffnet", !self.systemQuickLookOpen())
                             try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
                             NSApp.terminate(nil)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Test: like the user – ↓/↑ quickly through folders and files, then one click on X, then Esc, then ←/→ paging.
+    private func runCloseTest(log path: String) {
+        var lines: [String] = []
+        func check(_ name: String, _ ok: Bool) { lines.append((ok ? "PASS " : "FAIL ") + name) }
+        after(1.5) { [weak self] in
+            guard let self, let controller = self.windowControllers.first else { return }
+            let root = controller.currentURL
+            let ql = controller.debugQuickLook
+            controller.fileListVC.load(root, select: [root.appendingPathComponent("Fotos")])
+            self.after(1) {
+                controller.toggleQuickLook(nil)
+                var delay = 1.0
+                for code: UInt16 in [125, 125, 125, 125, 125, 126, 126, 126] {
+                    delay += 0.35
+                    self.after(delay) {
+                        self.sendKey(code, to: NSApp.keyWindow)
+                        lines.append("  \(code == 125 ? "↓" : "↑") Fenster: \(self.previewPanels().count), zeigt: \(ql.currentURL?.lastPathComponent ?? "-"), macOS-Schnellansicht: \(self.systemQuickLookOpen())")
+                    }
+                }
+                self.after(delay + 1.2) {
+                    check("immer nur ein Vorschaufenster, keine macOS-Schnellansicht", self.previewPanels().count == 1 && !self.systemQuickLookOpen())
+                    check("Vorschaufenster ist vorne", NSApp.keyWindow is QuickLookPanel)
+                    self.previewPanels().first?.performClose(nil)   // one click on X
+                    self.after(1) {
+                        check("ein Klick auf X schließt", self.previewPanels().isEmpty)
+                        controller.toggleQuickLook(nil)
+                        self.after(1) {
+                            self.sendKey(53, to: self.previewPanels().first)   // Esc
+                            self.after(1) {
+                                check("Esc schließt", self.previewPanels().isEmpty)
+                                // several files selected → ←/→ pages through them
+                                controller.fileListVC.load(root, select: ["Datei 1.txt", "Datei 2.txt", "Notiz.txt"].map { root.appendingPathComponent($0) })
+                                self.after(1) {
+                                    controller.toggleQuickLook(nil)
+                                    self.after(1) {
+                                        let first = ql.currentURL?.lastPathComponent
+                                        self.sendKey(124, to: self.previewPanels().first)   // →
+                                        self.after(0.5) {
+                                            let second = ql.currentURL?.lastPathComponent
+                                            check("→ blättert weiter (\(first ?? "-") → \(second ?? "-"), Titel: \(self.previewPanels().first?.title ?? "-"))", first != nil && second != nil && first != second)
+                                            self.sendKey(49, to: self.previewPanels().first)   // space
+                                            self.after(1) {
+                                                check("Leertaste schließt", self.previewPanels().isEmpty)
+                                                try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+                                                NSApp.terminate(nil)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

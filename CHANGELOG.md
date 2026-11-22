@@ -2,7 +2,7 @@
 
 ## Unveröffentlicht (für das nächste Update gesammelt)
 - Der Fenstertitel zeigt „MFExplorer – v<Version>“. Die Tabs zeigen weiter den Ordnernamen.
-- Die Leertaste auf einem Ordner öffnet ein eigenes Info-Fenster mit Anzahl, Größe und Datum. Die überflüssigen Knöpfe „Öffnen mit Safari“ und „Teilen“ der Schnellansicht sind dort weg. Mit ↑/↓ wechselt man zum nächsten Eintrag, bei Dateien öffnet sich die normale Schnellansicht.
+- Neues eigenes Vorschaufenster für die Leertaste. Bei Ordnern zeigt es Anzahl, Größe und Datum, bei Dateien die gewohnte Vorschau. Es gibt immer nur ein Fenster: Esc, Leertaste oder ein Klick aufs X schließen es, ↑/↓ wechselt den Eintrag, ←/→ blättert durch mehrere markierte Dateien. Die überflüssigen Knöpfe „Öffnen mit Safari“ und „Teilen“ sind weg.
 
 ## 1.1 – 22.11.2026
 - MFExplorer sucht selbst nach Updates und installiert sie auf Wunsch (Sparkle).

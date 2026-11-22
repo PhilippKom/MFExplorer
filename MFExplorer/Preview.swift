@@ -198,42 +198,47 @@ final class PreviewPaneViewController: NSViewController {
     }
 }
 
-// MARK: - Folder info window (space bar on a folder)
+// MARK: - Preview window (space bar)
 
-/// Panel that closes with space / Esc and passes ↑/↓ on, like Quick Look.
-final class FolderInfoPanel: NSPanel {
+/// Panel that handles space / Esc / arrow keys itself, before any view inside can swallow them.
+final class QuickLookPanel: NSPanel {
     var onKey: ((NSEvent) -> Bool)?
     override var canBecomeKey: Bool { true }
 
-    override func keyDown(with event: NSEvent) {
-        if onKey?(event) == true { return }
-        super.keyDown(with: event)
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, onKey?(event) == true { return }
+        super.sendEvent(event)
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        close()
     }
 }
 
-/// Shows folder facts (items, size, dates) in a small window – without Quick Look's "Öffnen mit"/"Teilen" buttons.
-final class FolderInfoPanelController: NSObject, NSWindowDelegate {
-    private var panel: FolderInfoPanel?
-    private var model: FolderInfoModel?
-    private(set) var folder: URL?
-    /// ↑/↓ pressed in the panel: move the selection in the main window.
+/// Our own "Schnellansicht": one window for everything.
+/// Folders → item count, size and dates; files → the normal macOS preview. Several items → ←/→ to page.
+final class QuickLookWindowController: NSObject, NSWindowDelegate {
+    private var panel: QuickLookPanel?
+    private var fileView: QLPreviewView?
+    private var folderModel: FolderInfoModel?
+    private var urls: [URL] = []
+    private var index = 0
+    /// ↑/↓ pressed: move the selection in the main window (which then calls show again).
     var onArrow: ((NSEvent) -> Void)?
-    /// The panel was closed: give the focus back to the main window.
+    /// The window was closed: give the focus back to the main window.
     var onClose: (() -> Void)?
 
     var isVisible: Bool { panel?.isVisible ?? false }
+    var currentURL: URL? { index < urls.count ? urls[index] : nil }
+    var showsFolder: Bool { folderModel != nil }
 
-    func show(_ url: URL, over parent: NSWindow?) {
-        if url == folder, isVisible { return }
-        model?.cancel()
-        let model = FolderInfoModel(url: url)
-        self.model = model
-        folder = url
+    func show(_ newURLs: [URL], over parent: NSWindow?) {
+        guard !newURLs.isEmpty else { return }
+        if newURLs == urls, isVisible { return }
+        urls = newURLs
+        index = 0
         let panel = self.panel ?? makePanel()
-        let hosting = NSHostingView(rootView: FolderInfoView(model: model))
-        hosting.frame = NSRect(x: 0, y: 0, width: 440, height: 400)
-        panel.contentView = hosting
-        panel.title = FileManager.default.displayName(atPath: url.path)
+        display()
         if !panel.isVisible {
             if let parent {
                 let frame = parent.frame
@@ -250,23 +255,82 @@ final class FolderInfoPanelController: NSObject, NSWindowDelegate {
         panel?.close()   // → windowWillClose
     }
 
-    private func makePanel() -> FolderInfoPanel {
-        let panel = FolderInfoPanel(contentRect: NSRect(x: 0, y: 0, width: 440, height: 400),
-                                    styleMask: [.titled, .closable, .resizable, .utilityWindow], backing: .buffered, defer: false)
+    /// Call once when the main window closes.
+    func shutdown() {
+        close()
+        fileView?.close()
+        fileView = nil
+    }
+
+    private func display() {
+        guard let panel, let url = currentURL else { return }
+        folderModel?.cancel()
+        folderModel = nil
+        let name = FileManager.default.displayName(atPath: url.path)
+        panel.title = urls.count > 1 ? "\(name)  (\(index + 1) von \(urls.count))" : name
+
+        if DirectoryReader.isDirectory(url) && FileOps.shared.isPlainFolder(url) {
+            fileView?.previewItem = nil
+            fileView?.isHidden = true
+            let model = FolderInfoModel(url: url)
+            folderModel = model
+            let hosting = NSHostingView(rootView: FolderInfoView(model: model))
+            install(hosting)
+        } else {
+            let view = fileView ?? {
+                let view = QLPreviewView(frame: .zero, style: .normal)!
+                view.shouldCloseWithWindow = false   // reused; closed once in shutdown()
+                view.autostarts = true
+                fileView = view
+                return view
+            }()
+            view.isHidden = false
+            install(view)
+            view.previewItem = url as NSURL
+        }
+    }
+
+    private func install(_ view: NSView) {
+        guard let content = panel?.contentView else { return }
+        for sub in content.subviews where sub !== view { sub.removeFromSuperview() }
+        if view.superview !== content {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview(view)
+            NSLayoutConstraint.activate([
+                view.topAnchor.constraint(equalTo: content.topAnchor),
+                view.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+                view.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+                view.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            ])
+        }
+    }
+
+    private func page(_ step: Int) {
+        guard urls.count > 1 else { return }
+        index = (index + step + urls.count) % urls.count
+        display()
+    }
+
+    private func makePanel() -> QuickLookPanel {
+        let panel = QuickLookPanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 520),
+                                   styleMask: [.titled, .closable, .resizable, .utilityWindow], backing: .buffered, defer: false)
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
+        panel.minSize = NSSize(width: 320, height: 260)
+        panel.contentView = NSView()
         panel.delegate = self
+        panel.setFrameAutosaveName("QuickLookWindow")
         panel.onKey = { [weak self] event in
+            guard let self else { return false }
+            let mods = event.modifierFlags.intersection([.command, .option, .control, .shift])
+            guard mods.isEmpty else { return false }
             switch event.keyCode {
-            case 49, 53:   // space, Esc
-                self?.close()
-                return true
-            case 125, 126:   // ↓ ↑
-                self?.onArrow?(event)
-                return true
-            default:
-                return false
+            case 49, 53: self.close(); return true          // space, Esc
+            case 125, 126: self.onArrow?(event); return true  // ↓ ↑
+            case 123: self.page(-1); return true             // ←
+            case 124: self.page(1); return true              // →
+            default: return false
             }
         }
         self.panel = panel
@@ -274,9 +338,10 @@ final class FolderInfoPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        model?.cancel()
-        model = nil
-        folder = nil
+        folderModel?.cancel()
+        folderModel = nil
+        fileView?.previewItem = nil
+        urls = []
         DispatchQueue.main.async { [weak self] in self?.onClose?() }
     }
 }

@@ -38,8 +38,7 @@ final class OpenWithRequest: NSObject {
 
 /// One explorer window: address bar, command bar, sidebar tree, details view and status bar.
 /// The sidebar and the main view navigate independently of each other.
-final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuItemValidation, SidebarDelegate, FileListDelegate,
-    QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuItemValidation, SidebarDelegate, FileListDelegate {
     static let finderTags: [(String, NSColor)] = [
         ("Rot", .systemRed), ("Orange", .systemOrange), ("Gelb", .systemYellow), ("Grün", .systemGreen),
         ("Blau", .systemBlue), ("Lila", .systemPurple), ("Grau", .systemGray),
@@ -52,16 +51,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     private var sidebarItem: NSSplitViewItem!
     let previewVC = PreviewPaneViewController()
     private var previewSplitItem: NSSplitViewItem!
-    private var quickLookItems: [PreviewItem] = []
-    private let quickLookBuilder = PreviewBuilder()
-    private var quickLookActive = false
-    private lazy var folderInfo: FolderInfoPanelController = {
-        let controller = FolderInfoPanelController()
+    private lazy var quickLook: QuickLookWindowController = {
+        let controller = QuickLookWindowController()
         controller.onArrow = { [weak self] event in self?.fileListVC.activeView.keyDown(with: event) }
-        controller.onClose = { [weak self] in
-            guard let self, !self.quickLookVisible else { return }
-            self.window?.makeKeyAndOrderFront(nil)
-        }
+        controller.onClose = { [weak self] in self?.window?.makeKeyAndOrderFront(nil) }
         return controller
     }()
     private let addressBar = AddressBarView()
@@ -171,7 +164,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     // MARK: - Window
 
     func windowWillClose(_ notification: Notification) {
-        folderInfo.close()
+        quickLook.shutdown()
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
         onClose?()
@@ -297,7 +290,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     private func updatePreview() {
         let urls = context(nil).urls
         if !previewSplitItem.isCollapsed { previewVC.show(urls) }
-        if folderInfo.isVisible || (quickLookActive && quickLookVisible) { showPreviewWindow() }
+        if quickLook.isVisible { quickLook.show(previewTargets, over: window) }
     }
 
     #if DEBUG
@@ -321,98 +314,19 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         return urls.isEmpty ? [currentURL] : urls
     }
 
-    private var quickLookVisible: Bool {
-        QLPreviewPanel.sharedPreviewPanelExists() && (QLPreviewPanel.shared()?.isVisible ?? false)
-    }
-
-    private func makeQuickLookItems() -> [PreviewItem] {
-        quickLookBuilder.items(for: previewTargets)
-    }
-
-    /// Space bar: open / close the preview (like Finder).
-    /// One folder → our folder info window (items, size, dates); otherwise → Quick Look.
+    /// Space bar: open / close the preview window (like Finder's Quick Look).
+    /// Folders show item count, size and dates; files the normal macOS preview.
     @objc func toggleQuickLook(_ sender: Any?) {
-        if folderInfo.isVisible {
-            folderInfo.close()
-        } else if quickLookVisible {
-            QLPreviewPanel.shared()?.orderOut(nil)
+        if quickLook.isVisible {
+            quickLook.close()
         } else {
-            showPreviewWindow()
+            quickLook.show(previewTargets, over: window)
         }
     }
 
-    /// Shows the right preview window for the current selection (also called when the selection changes).
-    private func showPreviewWindow() {
-        let urls = previewTargets
-        if urls.count == 1, DirectoryReader.isDirectory(urls[0]), FileOps.shared.isPlainFolder(urls[0]) {
-            if quickLookVisible { QLPreviewPanel.shared()?.orderOut(nil) }
-            folderInfo.show(urls[0], over: window)
-            return
-        }
-        if folderInfo.isVisible {
-            folderInfo.close()
-            window?.makeKeyAndOrderFront(nil)
-        }
-        guard let panel = QLPreviewPanel.shared() else { return }
-        if panel.isVisible {
-            quickLookItems = makeQuickLookItems()
-            panel.reloadData()
-        } else {
-            window?.makeKeyAndOrderFront(nil)   // Quick Look finds its data source via the key window
-            panel.makeKeyAndOrderFront(nil)
-        }
-    }
-
-    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
-
-    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
-        quickLookActive = true
-        quickLookItems = makeQuickLookItems()
-        panel.dataSource = self
-        panel.delegate = self
-        panel.reloadData()
-    }
-
-    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
-        quickLookActive = false
-        quickLookBuilder.cancel()
-        quickLookItems = []
-        panel.dataSource = nil
-        panel.delegate = nil
-    }
-
-    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { quickLookItems.count }
-
-    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
-        index < quickLookItems.count ? quickLookItems[index] : nil
-    }
-
-    func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
-        guard let event, event.type == .keyDown else { return false }
-        switch event.keyCode {
-        case 49:   // space closes, like in Finder
-            panel.orderOut(nil)
-            return true
-        case 125, 126:   // up / down: move the selection in the list, the preview follows
-            if quickLookItems.count <= 1 || fileListVC.selectedItems.count <= 1 {
-                fileListVC.activeView.keyDown(with: event)
-                return true
-            }
-            return false
-        default:
-            return false
-        }
-    }
-
-    func previewPanel(_ panel: QLPreviewPanel!, sourceFrameOnScreenFor item: QLPreviewItem!) -> NSRect {
-        guard fileListVC.viewMode == .details, let item = item as? PreviewItem, let window,
-              let row = fileListVC.items.firstIndex(where: { $0.url == item.source }) else { return .zero }
-        let table = fileListVC.tableView
-        let rect = table.rect(ofRow: row)
-        guard table.visibleRect.intersects(rect) else { return .zero }
-        let iconRect = NSRect(x: rect.minX + 4, y: rect.minY + 3, width: 16, height: 16)
-        return window.convertToScreen(table.convert(iconRect, to: nil))
-    }
+    #if DEBUG
+    var debugQuickLook: QuickLookWindowController { quickLook }
+    #endif
 
     @objc private func updateCommandBar() {
         let ctx = context(nil)

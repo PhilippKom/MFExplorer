@@ -34,7 +34,7 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - Selbsttest der Dateioperationen (nur Debug-Build, arbeitet nur in `~/ExplorerTest/_selftest`):
   `open -n build/Debug/MFExplorer.app --args -selfTest <scratchpad>/selftest.log`
 - Such-Test (wartet bis die Suche fertig ist, schreibt Treffer + Fundstelle): `open -n build/Debug/MFExplorer.app --args -startPath ~/ExplorerTest/Inhaltstest -searchContent YES -searchTestWord Umsatz -searchTest <scratchpad>/search.log`
-- Leertasten-Test (Ordner-Info-Fenster ↔ Schnellansicht): `open -n build/Debug/MFExplorer.app --args -startPath ~/ExplorerTest -spaceTest <scratchpad>/spacetest.log`
+- Vorschaufenster-Tests (eigenes Fenster statt macOS-Schnellansicht; `-closeTest` simuliert ↑/↓, X, Esc, ←/→): `open -n build/Debug/MFExplorer.app --args -startPath ~/ExplorerTest -spaceTest <scratchpad>/spacetest.log` und `-closeTest <scratchpad>/closetest.log`
 - Tab-Test (öffnet 3 Tabs, schließt einen, prüft dass die App weiterläuft): `open -n build/Debug/MFExplorer.app --args -tabTest <scratchpad>/tabtest.log`
 - Absturzprotokolle: `~/Library/Logs/DiagnosticReports/MFExplorer-*.ips`. QLPreviewView nie selbst `close()` aufrufen (schließt sich mit dem Fenster). – schreibt PASS/FAIL ins Protokoll und beendet sich. Nach Änderungen an `FileOperations.swift` immer laufen lassen.
 
