@@ -253,7 +253,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
     private func updateChrome() {
         window?.title = FileManager.default.displayName(atPath: currentURL.path)
-        window?.representedURL = currentURL
+        // No proxy icon (representedURL): in tabs it sat where the close "x" appears and pushed it away on hover.
+        window?.tab.toolTip = currentURL.path
         addressBar.update(url: currentURL, canGoBack: !backStack.isEmpty,
                           canGoForward: !forwardStack.isEmpty, canGoUp: parentURL != nil)
     }
