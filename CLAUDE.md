@@ -29,3 +29,12 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - Starten: `open build/Debug/MacExplorer.app`
 - Selbsttest (nur Debug-Build): `open -n build/Debug/MacExplorer.app --args -startPath ~/ExplorerTest -snapshotPath <scratchpad>/bild.png [-debugReveal YES]`
   speichert nach dem Start ein Bild des Fensters (Bildschirmaufnahme von außen ist nicht erlaubt).
+- Selbsttest der Dateioperationen (nur Debug-Build, arbeitet nur in `~/ExplorerTest/_selftest`):
+  `open -n build/Debug/MacExplorer.app --args -selfTest <scratchpad>/selftest.log` – schreibt PASS/FAIL ins Protokoll und beendet sich. Nach Änderungen an `FileOperations.swift` immer laufen lassen.
+
+## Aufbau des Codes
+- `FileOperations.swift`: alle Änderungen am Dateisystem (Kopieren/Verschieben mit Konfliktdialog und Fortschritt, Papierkorb, Umbenennen, ZIP, Tags), Undo, Zwischenablage, Drag-&-Drop-Regeln.
+- `MainWindowController.swift`: Fenster, Navigation, alle Befehle und Kontextmenüs.
+- `FileListViewController.swift`: Detailansicht (Auswahlrechteck, Umbenennen, Drag & Drop).
+- `SidebarViewController.swift`: Baum (unabhängig von der Hauptansicht).
+- `Bars.swift`: Adress-, Befehls- und Statusleiste. `PropertiesWindow.swift`: Eigenschaften-Fenster.

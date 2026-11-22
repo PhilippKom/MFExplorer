@@ -21,10 +21,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         #if DEBUG
         scheduleDebugSnapshot()
+        if let path = UserDefaults.standard.string(forKey: "selfTest") {
+            selfTest = DebugSelfTest(logPath: path)
+            selfTest?.run()
+        }
         #endif
     }
 
     #if DEBUG
+    private var selfTest: DebugSelfTest?
+
     /// Test helper: `-snapshotPath <file.png>` saves a picture of the window after launch.
     /// `-debugReveal YES` presses "Im Baum zeigen" first. Only in debug builds.
     private func scheduleDebugSnapshot() {
@@ -63,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openWindow(at: current ?? FileManager.default.homeDirectoryForCurrentUser)
     }
 
-    private func openWindow(at url: URL) {
+    func openWindow(at url: URL) {
         let controller = MainWindowController(url: url)
         controller.onClose = { [weak self, weak controller] in
             self?.windowControllers.removeAll { $0 === controller }
@@ -110,9 +116,23 @@ enum MainMenu {
             sep(),
             item("MacExplorer beenden", #selector(NSApplication.terminate(_:)), "q"),
         ])
+        let f2 = String(Character(UnicodeScalar(NSF2FunctionKey)!))
+        let backspace = String(Character(UnicodeScalar(NSBackspaceCharacter)!))
         submenu("Ablage", [
             item("Neues Fenster", #selector(AppDelegate.newWindow(_:)), "n"),
+            item("Neuer Ordner", #selector(MainWindowController.newFolder(_:)), "n", [.command, .shift]),
+            item("Neues Textdokument", #selector(MainWindowController.newTextFile(_:))),
+            sep(),
             item("Öffnen", #selector(MainWindowController.openSelection(_:)), "o"),
+            item("Umbenennen", #selector(MainWindowController.renameItem(_:)), f2, []),
+            item("Eigenschaften", #selector(MainWindowController.showProperties(_:)), "i"),
+            sep(),
+            item("Als ZIP komprimieren", #selector(MainWindowController.compressItems(_:))),
+            item("Entpacken", #selector(MainWindowController.extractItem(_:))),
+            item("Teilen …", #selector(MainWindowController.shareItems(_:))),
+            item("Im Finder zeigen", #selector(MainWindowController.revealInFinder(_:)), "r", [.command, .option]),
+            sep(),
+            item("In den Papierkorb legen", #selector(MainWindowController.moveToTrash(_:)), backspace),
             sep(),
             item("Fenster schließen", #selector(NSWindow.performClose(_:)), "w"),
         ])
@@ -126,6 +146,8 @@ enum MainMenu {
             item("Alles auswählen", #selector(NSText.selectAll(_:)), "a"),
             sep(),
             item("Pfad kopieren", #selector(MainWindowController.copyPath(_:)), "c", [.command, .option]),
+            sep(),
+            item("Vor dem Löschen nachfragen", #selector(MainWindowController.toggleConfirmTrash(_:))),
         ])
         submenu("Darstellung", [
             item("Seitenleiste ausblenden", #selector(MainWindowController.toggleSidebarPane(_:)), "s", [.command, .control]),

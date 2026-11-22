@@ -15,6 +15,12 @@ final class Settings {
         set { defaults.set(newValue, forKey: "showHiddenFiles"); NotificationCenter.default.post(name: .settingsChanged, object: nil) }
     }
 
+    /// Ask before moving to the Trash (can be switched off in the dialog).
+    var confirmTrash: Bool {
+        get { defaults.object(forKey: "confirmTrash") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "confirmTrash") }
+    }
+
     var hideFilesInTree: Bool {
         get { defaults.bool(forKey: "hideFilesInTree") }
         set { defaults.set(newValue, forKey: "hideFilesInTree"); NotificationCenter.default.post(name: .settingsChanged, object: nil) }
@@ -34,7 +40,7 @@ final class FileItem {
     static let resourceKeys: [URLResourceKey] = [
         .localizedNameKey, .isDirectoryKey, .isPackageKey, .isHiddenKey, .isSymbolicLinkKey,
         .contentModificationDateKey, .creationDateKey, .contentAccessDateKey,
-        .fileSizeKey, .localizedTypeDescriptionKey,
+        .fileSizeKey, .localizedTypeDescriptionKey, .tagNamesKey,
     ]
 
     let url: URL
@@ -47,6 +53,7 @@ final class FileItem {
     let accessed: Date?
     let size: Int64?
     let typeName: String
+    let tags: [String]
 
     private var cachedIcon: NSImage?
     var icon: NSImage {
@@ -73,6 +80,7 @@ final class FileItem {
         accessed = v?.contentAccessDate
         size = directory ? nil : v?.fileSize.map { Int64($0) }
         typeName = isFolder ? "Ordner" : (v?.localizedTypeDescription ?? "Datei")
+        tags = v?.tagNames ?? []
     }
 
     /// Compare two items by a column key ("name", "modified", "type", "size", "created", "accessed").
@@ -85,6 +93,7 @@ final class FileItem {
         case "created": return dates(a.created, b.created)
         case "accessed": return dates(a.accessed, b.accessed)
         case "type": return a.typeName.localizedStandardCompare(b.typeName)
+        case "tags": return a.tags.joined(separator: ",").localizedStandardCompare(b.tags.joined(separator: ","))
         case "size":
             let x = a.size ?? -1, y = b.size ?? -1
             return x == y ? .orderedSame : (x < y ? .orderedAscending : .orderedDescending)

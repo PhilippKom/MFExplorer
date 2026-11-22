@@ -320,8 +320,15 @@ final class BreadcrumbView: NSView, NSTextFieldDelegate {
 
 final class CommandBarView: NSView {
     private let stack = NSStackView()
+    private let cutButton = BarButton.make(symbol: "scissors", tip: "Ausschneiden (⌘X)", action: #selector(MainWindowController.cut(_:)))
+    private let copyButton = BarButton.make(symbol: "doc.on.doc", tip: "Kopieren (⌘C)", action: #selector(MainWindowController.copy(_:)))
+    private let pasteButton = BarButton.make(symbol: "doc.on.clipboard", tip: "Einfügen (⌘V)", action: #selector(MainWindowController.paste(_:)))
+    private let renameButton = BarButton.make(symbol: "character.cursor.ibeam", tip: "Umbenennen (F2)", action: #selector(MainWindowController.renameItem(_:)))
+    private let shareButton = BarButton.make(symbol: "square.and.arrow.up", tip: "Teilen", action: #selector(MainWindowController.shareItems(_:)))
+    private let trashButton = BarButton.make(symbol: "trash", tip: "In den Papierkorb legen (⌫)", action: #selector(MainWindowController.moveToTrash(_:)))
+    private let undoButton = BarButton.make(symbol: "arrow.uturn.backward", tip: "Rückgängig (⌘Z)", action: Selector(("undo:")))
 
-    init(sortMenu: @escaping () -> NSMenu, viewMenu: @escaping () -> NSMenu, moreMenu: @escaping () -> NSMenu) {
+    init(newMenu: @escaping () -> NSMenu, sortMenu: @escaping () -> NSMenu, viewMenu: @escaping () -> NSMenu, moreMenu: @escaping () -> NSMenu) {
         super.init(frame: .zero)
         stack.orientation = .horizontal
         stack.spacing = 2
@@ -335,18 +342,7 @@ final class CommandBarView: NSView {
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
         ])
 
-        let later = " – kommt in Meilenstein 2"
-        let newButton = BarButton.make(symbol: "plus.circle", title: "Neu", tip: "Neuer Ordner" + later, action: nil)
-        let fileButtons: [NSButton] = [
-            BarButton.make(symbol: "scissors", tip: "Ausschneiden (⌘X)" + later, action: nil),
-            BarButton.make(symbol: "doc.on.doc", tip: "Kopieren (⌘C)" + later, action: nil),
-            BarButton.make(symbol: "doc.on.clipboard", tip: "Einfügen (⌘V)" + later, action: nil),
-            BarButton.make(symbol: "character.cursor.ibeam", tip: "Umbenennen (F2)" + later, action: nil),
-            BarButton.make(symbol: "square.and.arrow.up", tip: "Teilen" + later, action: nil),
-            BarButton.make(symbol: "trash", tip: "In den Papierkorb (⌫)" + later, action: nil),
-        ]
-        ([newButton] + fileButtons).forEach { $0.isEnabled = false }
-
+        let newButton = MenuButton.make(symbol: "plus.circle", title: "Neu", tip: "Neuer Ordner (⇧⌘N) oder neue Datei", provider: newMenu)
         let sort = MenuButton.make(symbol: "arrow.up.arrow.down", title: "Sortieren", tip: "Sortieren nach …", provider: sortMenu)
         let view = MenuButton.make(symbol: "rectangle.split.3x1", title: "Ansicht", tip: "Ansicht anpassen", provider: viewMenu)
         let more = MenuButton.make(symbol: "ellipsis.circle", title: nil, tip: "Weitere Befehle", provider: moreMenu)
@@ -356,15 +352,29 @@ final class CommandBarView: NSView {
 
         stack.addView(newButton, in: .leading)
         stack.addView(BarButton.separator(), in: .leading)
-        fileButtons.forEach { stack.addView($0, in: .leading) }
+        for button in [cutButton, copyButton, pasteButton, renameButton, shareButton, trashButton] {
+            stack.addView(button, in: .leading)
+        }
         stack.addView(BarButton.separator(), in: .leading)
         stack.addView(sort, in: .leading)
         stack.addView(view, in: .leading)
+        stack.addView(BarButton.separator(), in: .leading)
+        stack.addView(undoButton, in: .leading)
         stack.addView(more, in: .leading)
         stack.addView(reveal, in: .trailing)
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    func update(hasSelection: Bool, canModify: Bool, canPaste: Bool, canUndo: Bool) {
+        cutButton.isEnabled = canModify
+        copyButton.isEnabled = hasSelection
+        pasteButton.isEnabled = canPaste
+        renameButton.isEnabled = canModify
+        trashButton.isEnabled = canModify
+        shareButton.isEnabled = true
+        undoButton.isEnabled = canUndo
+    }
 }
 
 // MARK: - Status bar

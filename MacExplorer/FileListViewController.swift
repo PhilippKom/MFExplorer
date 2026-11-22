@@ -3,6 +3,20 @@ import AppKit
 protocol FileListDelegate: AnyObject {
     func fileList(_ list: FileListViewController, openFolder url: URL)
     func fileListDidChange(_ list: FileListViewController)
+    func fileList(_ list: FileListViewController, rename url: URL, to name: String)
+    func fileList(_ list: FileListViewController, buildMenu menu: NSMenu, clicked: FileItem?)
+}
+
+/// Semi-transparent selection rectangle.
+private final class RubberBandView: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.controlAccentColor.withAlphaComponent(0.15).setFill()
+        bounds.fill()
+        NSColor.controlAccentColor.withAlphaComponent(0.8).setStroke()
+        let path = NSBezierPath(rect: bounds.insetBy(dx: 0.5, dy: 0.5))
+        path.lineWidth = 1
+        path.stroke()
+    }
 }
 
 final class FileTableView: NSTableView {
@@ -14,10 +28,75 @@ final class FileTableView: NSTableView {
         if event.keyCode == 125 && mods == .command { onOpen?(); return }                       // Cmd+Down
         super.keyDown(with: event)
     }
+
+    /// Like Windows: dragging starts only on the icon or the name. Anywhere else draws a selection rectangle.
+    private func isOnName(_ point: NSPoint, row: Int) -> Bool {
+        guard row >= 0 else { return false }
+        let col = column(withIdentifier: NSUserInterfaceItemIdentifier("name"))
+        guard col >= 0, let cell = view(atColumn: col, row: row, makeIfNecessary: false) as? NSTableCellView else { return true }
+        let cellRect = cell.convert(cell.bounds, to: self)
+        var right = cellRect.minX + 24
+        if let text = cell.textField {
+            let textRect = text.convert(text.bounds, to: self)
+            right = textRect.minX + min(text.intrinsicContentSize.width, textRect.width) + 4
+        }
+        return point.x >= cellRect.minX && point.x <= right
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let row = self.row(at: point)
+        if event.clickCount > 1 || isOnName(point, row: row) {
+            super.mouseDown(with: event)
+            return
+        }
+        window?.makeFirstResponder(self)
+        rubberBand(from: point, event: event, clickedRow: row)
+    }
+
+    private func rubberBand(from start: NSPoint, event: NSEvent, clickedRow: Int) {
+        let mods = event.modifierFlags.intersection([.command, .shift])
+        let initial = selectedRowIndexes
+        let anchor = selectedRow
+        let overlay = RubberBandView()
+        var moved = false
+
+        while let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
+            if next.type == .leftMouseUp { break }
+            autoscroll(with: next)
+            let p = convert(next.locationInWindow, from: nil)
+            if !moved && hypot(p.x - start.x, p.y - start.y) < 4 { continue }
+            if !moved { moved = true; addSubview(overlay) }
+            let rect = NSRect(x: min(start.x, p.x), y: min(start.y, p.y), width: abs(p.x - start.x), height: abs(p.y - start.y))
+            overlay.frame = rect
+            let range = rows(in: rect)
+            let hits = IndexSet(integersIn: range.location..<(range.location + range.length))
+            if mods.contains(.command) {
+                selectRowIndexes(initial.symmetricDifference(hits), byExtendingSelection: false)
+            } else if mods.contains(.shift) {
+                selectRowIndexes(initial.union(hits), byExtendingSelection: false)
+            } else {
+                selectRowIndexes(hits, byExtendingSelection: false)
+            }
+        }
+        overlay.removeFromSuperview()
+        guard !moved else { return }
+
+        // A plain click without dragging.
+        if clickedRow < 0 {
+            if mods.isEmpty { deselectAll(nil) }
+        } else if mods.contains(.command) {
+            if initial.contains(clickedRow) { deselectRow(clickedRow) } else { selectRowIndexes(IndexSet(integer: clickedRow), byExtendingSelection: true) }
+        } else if mods.contains(.shift), anchor >= 0 {
+            selectRowIndexes(IndexSet(integersIn: min(anchor, clickedRow)...max(anchor, clickedRow)), byExtendingSelection: false)
+        } else {
+            selectRowIndexes(IndexSet(integer: clickedRow), byExtendingSelection: false)
+        }
+    }
 }
 
 /// The details view: a table with sortable, resizable, reorderable columns.
-final class FileListViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
+final class FileListViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate, NSTextFieldDelegate {
     struct Column {
         let id: String
         let title: String
@@ -33,6 +112,7 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         Column(id: "size", title: "Größe", width: 90, visible: true, rightAligned: true),
         Column(id: "created", title: "Erstellungsdatum", width: 150, visible: false),
         Column(id: "accessed", title: "Zugriffsdatum", width: 150, visible: false),
+        Column(id: "tags", title: "Tags", width: 120, visible: false),
     ]
 
     weak var delegate: FileListDelegate?
@@ -41,12 +121,18 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
     private let messageLabel = NSTextField(labelWithString: "")
     private let messageButton = NSButton(title: "Festplattenvollzugriff erlauben …", target: nil, action: nil)
     private let messageStack = NSStackView()
+    private let headerMenu = NSMenu()
+    private let rowMenu = NSMenu()
 
     private(set) var items: [FileItem] = []
     private(set) var folderURL: URL?
     private var loadGeneration = 0
     private var watcher: DispatchSourceFileSystemObject?
     private var pendingReload: DispatchWorkItem?
+
+    private var renamingURL: URL?
+    private var renameCancelled = false
+    var isRenaming: Bool { renamingURL != nil }
 
     var selectedItems: [FileItem] {
         tableView.selectedRowIndexes.compactMap { $0 < items.count ? items[$0] : nil }
@@ -84,9 +170,10 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
             if info.rightAligned { column.headerCell.alignment = .right }
             tableView.addTableColumn(column)
         }
-        let headerMenu = NSMenu()
         headerMenu.delegate = self
         tableView.headerView?.menu = headerMenu
+        rowMenu.delegate = self
+        tableView.menu = rowMenu
         tableView.autosaveName = "FileListColumns"
         tableView.autosaveTableColumns = true
 
@@ -95,6 +182,13 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         tableView.target = self
         tableView.doubleAction = #selector(doubleClicked(_:))
         tableView.onOpen = { [weak self] in self?.openSelection() }
+
+        // Drag & drop
+        let promiseTypes = NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) }
+        tableView.registerForDraggedTypes([.fileURL] + promiseTypes)
+        tableView.setDraggingSourceOperationMask([.copy, .move, .generic], forLocal: true)
+        tableView.setDraggingSourceOperationMask([.copy, .move, .generic, .link, .delete], forLocal: false)
+        tableView.draggingDestinationFeedbackStyle = .regular
 
         messageLabel.textColor = .secondaryLabelColor
         messageLabel.alignment = .center
@@ -127,7 +221,9 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         let key = defaults.string(forKey: "sortKey") ?? "name"
         let ascending = defaults.object(forKey: "sortAscending") as? Bool ?? true
         tableView.sortDescriptors = [NSSortDescriptor(key: key, ascending: ascending)]
-        NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: .settingsChanged, object: nil)
+        let nc = NotificationCenter.default
+        nc.addObserver(self, selector: #selector(settingsChanged), name: .settingsChanged, object: nil)
+        nc.addObserver(self, selector: #selector(clipboardChanged), name: .clipboardChanged, object: nil)
     }
 
     deinit {
@@ -137,23 +233,33 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
 
     @objc private func settingsChanged() { reload() }
 
+    @objc private func clipboardChanged() {
+        guard !isRenaming else { return }
+        let selection = tableView.selectedRowIndexes
+        tableView.reloadData()
+        tableView.selectRowIndexes(selection, byExtendingSelection: false)
+    }
+
     // MARK: - Loading
 
-    /// Shows the contents of `url`. `select` highlights one item (e.g. the folder you came from).
-    func load(_ url: URL, select: URL? = nil, preserveSelection: Bool = false) {
+    /// Shows the contents of `url`. `select` highlights items (e.g. the folder you came from),
+    /// `rename` starts renaming the first of them (used for "Neuer Ordner").
+    func load(_ url: URL, select: [URL] = [], rename: Bool = false, preserveSelection: Bool = false) {
         let sameFolder = url == folderURL
         folderURL = url
         loadGeneration += 1
         let generation = loadGeneration
         let includeHidden = Settings.shared.showHiddenFiles
-        let keep: Set<URL> = preserveSelection ? Set(selectedItems.map(\.url)) : []
+        var wanted = Set(select.map(\.standardizedFileURL))
+        if preserveSelection { wanted.formUnion(selectedItems.map(\.url.standardizedFileURL)) }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let result = Result { try DirectoryReader.contents(of: url, includeHidden: includeHidden) }
             DispatchQueue.main.async { [weak self] in
                 guard let self, generation == self.loadGeneration else { return }
-                self.apply(result, keep: keep, select: select, scrollToTop: !preserveSelection)
+                self.apply(result, select: wanted, scrollToTop: !preserveSelection && select.isEmpty)
                 if !sameFolder || self.watcher == nil { self.watch(url) }
+                if rename, let first = select.first { self.beginRename(first) }
             }
         }
     }
@@ -163,7 +269,7 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         load(folderURL, preserveSelection: true)
     }
 
-    private func apply(_ result: Result<[FileItem], Error>, keep: Set<URL>, select: URL?, scrollToTop: Bool) {
+    private func apply(_ result: Result<[FileItem], Error>, select wanted: Set<URL>, scrollToTop: Bool) {
         switch result {
         case .success(let list):
             items = list
@@ -186,8 +292,6 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         }
         tableView.reloadData()
 
-        var wanted = keep
-        if let select { wanted.insert(select.standardizedFileURL) }
         let rows = IndexSet(items.indices.filter { wanted.contains(items[$0].url.standardizedFileURL) })
         tableView.selectRowIndexes(rows, byExtendingSelection: false)
         if let first = rows.first {
@@ -223,11 +327,15 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         watcher = source
     }
 
-    private func scheduleReload() {
+    private func scheduleReload(after delay: Double = 0.3) {
         pendingReload?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.reload() }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if self.isRenaming { self.scheduleReload(after: 1); return }   // don't disturb typing
+            self.reload()
+        }
         pendingReload = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     // MARK: - Sorting
@@ -267,12 +375,15 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         guard let column = tableColumn, row < items.count else { return nil }
         let item = items[row]
         let id = column.identifier.rawValue
+        let dimmed = item.isHidden || FileClipboard.shared.isCut(item.url)
         if id == "name" {
             let cell = tableView.makeView(withIdentifier: NSUserInterfaceItemIdentifier("NameCell"), owner: self) as? NSTableCellView
                 ?? Cells.iconCell("NameCell")
+            cell.textField?.isEditable = false
+            cell.textField?.drawsBackground = false
             cell.textField?.stringValue = item.name
             cell.imageView?.image = item.icon
-            cell.alphaValue = item.isHidden ? 0.5 : 1
+            cell.alphaValue = dimmed ? 0.5 : 1
             return cell
         }
         let cell = tableView.makeView(withIdentifier: NSUserInterfaceItemIdentifier("TextCell"), owner: self) as? NSTableCellView
@@ -284,12 +395,13 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         case "accessed": text = Format.date(item.accessed)
         case "type": text = item.typeName
         case "size": text = Format.size(item.size)
+        case "tags": text = item.tags.joined(separator: ", ")
         default: text = ""
         }
         cell.textField?.stringValue = text
         cell.textField?.alignment = id == "size" ? .right : .left
         cell.textField?.textColor = .secondaryLabelColor
-        cell.alphaValue = item.isHidden ? 0.5 : 1
+        cell.alphaValue = dimmed ? 0.5 : 1
         return cell
     }
 
@@ -312,17 +424,127 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         if let folder = list.first(where: \.isFolder) { delegate?.fileList(self, openFolder: folder.url) }
     }
 
-    // MARK: - Column header menu (show / hide columns)
+    // MARK: - Renaming in place (F2)
+
+    func beginRename(_ url: URL? = nil) {
+        guard let target = (url ?? selectedItems.first?.url)?.standardizedFileURL,
+              let row = items.firstIndex(where: { $0.url.standardizedFileURL == target }) else { NSSound.beep(); return }
+        tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        tableView.scrollRowToVisible(row)
+        let col = tableView.column(withIdentifier: NSUserInterfaceItemIdentifier("name"))
+        guard col >= 0, let cell = tableView.view(atColumn: col, row: row, makeIfNecessary: true) as? NSTableCellView,
+              let field = cell.textField else { return }
+        renamingURL = items[row].url
+        renameCancelled = false
+        field.stringValue = items[row].url.lastPathComponent   // the real name, with extension
+        field.isEditable = true
+        field.isSelectable = true
+        field.drawsBackground = true
+        field.backgroundColor = .textBackgroundColor
+        field.focusRingType = .exterior
+        field.delegate = self
+        cell.alphaValue = 1
+        view.window?.makeFirstResponder(field)
+        if let editor = field.currentEditor() {
+            let name = field.stringValue as NSString
+            let ext = items[row].isFolder ? "" : name.pathExtension
+            let length = ext.isEmpty ? name.length : name.length - (ext as NSString).length - 1
+            editor.selectedRange = NSRange(location: 0, length: max(0, length))
+        }
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        guard isRenaming else { return false }
+        if selector == #selector(NSResponder.cancelOperation(_:)) {
+            renameCancelled = true
+            view.window?.makeFirstResponder(tableView)
+            return true
+        }
+        if selector == #selector(NSResponder.insertNewline(_:)) {
+            view.window?.makeFirstResponder(tableView)
+            return true
+        }
+        return false
+    }
+
+    func controlTextDidEndEditing(_ notification: Notification) {
+        guard let field = notification.object as? NSTextField, let url = renamingURL else { return }
+        renamingURL = nil
+        field.isEditable = false
+        field.drawsBackground = false
+        field.delegate = nil
+        let newName = field.stringValue
+        let cancelled = renameCancelled
+        let selection = tableView.selectedRowIndexes
+        tableView.reloadData()   // show the normal name again
+        tableView.selectRowIndexes(selection, byExtendingSelection: false)
+        if !cancelled { delegate?.fileList(self, rename: url, to: newName) }
+    }
+
+    // MARK: - Drag & drop
+
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        guard row < items.count, !isRenaming else { return nil }
+        return items[row].url as NSURL
+    }
+
+    private func dropTarget(row: Int, operation: NSTableView.DropOperation) -> URL? {
+        if operation == .on, row >= 0, row < items.count, items[row].isFolder { return items[row].url }
+        return folderURL
+    }
+
+    func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int,
+                   proposedDropOperation operation: NSTableView.DropOperation) -> NSDragOperation {
+        if !(operation == .on && row >= 0 && row < items.count && items[row].isFolder) {
+            tableView.setDropRow(-1, dropOperation: .on)   // highlight the whole list = current folder
+        }
+        guard let target = dropTarget(row: row, operation: operation) else { return [] }
+        let result = DropRules.operation(info, into: target)
+        if result.isEmpty && row >= 0 {
+            // Can't drop on that folder (e.g. onto itself) – try the current folder instead.
+            tableView.setDropRow(-1, dropOperation: .on)
+            guard let folderURL else { return [] }
+            return DropRules.operation(info, into: folderURL)
+        }
+        return result
+    }
+
+    func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int,
+                   dropOperation: NSTableView.DropOperation) -> Bool {
+        guard let target = dropTarget(row: row, operation: dropOperation) else { return false }
+        let intoCurrent = target.standardizedFileURL == folderURL?.standardizedFileURL
+        return DropRules.accept(info, into: target) { [weak self] results in
+            guard let self, intoCurrent, let folder = self.folderURL else { return }
+            self.load(folder, select: results)
+        }
+    }
+
+    // MARK: - Menus
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        for column in tableView.tableColumns where column.identifier.rawValue != "name" {
-            let item = NSMenuItem(title: column.title, action: #selector(toggleColumn(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = column
-            item.state = column.isHidden ? .off : .on
-            menu.addItem(item)
+        if menu === headerMenu {
+            for column in tableView.tableColumns where column.identifier.rawValue != "name" {
+                let item = NSMenuItem(title: column.title, action: #selector(toggleColumn(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = column
+                item.state = column.isHidden ? .off : .on
+                menu.addItem(item)
+            }
+            return
         }
+        // Right-click: like Windows, a click on an unselected item selects just that item.
+        let row = tableView.clickedRow
+        var clicked: FileItem?
+        if row >= 0, row < items.count {
+            if !tableView.selectedRowIndexes.contains(row) {
+                tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            }
+            clicked = items[row]
+        } else {
+            tableView.deselectAll(nil)
+        }
+        delegate?.fileList(self, buildMenu: menu, clicked: clicked)
     }
 
     @objc private func toggleColumn(_ sender: NSMenuItem) {

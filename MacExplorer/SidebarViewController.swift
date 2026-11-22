@@ -2,6 +2,8 @@ import AppKit
 
 protocol SidebarDelegate: AnyObject {
     func sidebar(_ sidebar: SidebarViewController, openFolder url: URL)
+    func sidebar(_ sidebar: SidebarViewController, buildMenu menu: NSMenu, node: TreeNode)
+    func sidebarSelectionChanged(_ sidebar: SidebarViewController)
 }
 
 /// One row in the sidebar tree. Children of folders are loaded lazily on first expand.
@@ -97,6 +99,12 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource, NS
     private let places = TreeNode(section: "Dieser Mac")
     private let drives = TreeNode(section: "Laufwerke")
     private var roots: [TreeNode] { [favorites, places, drives] }
+    private var hoverNode: TreeNode?
+    private var hoverTimer: Timer?
+
+    var selectedNode: TreeNode? {
+        outline.selectedRow >= 0 ? outline.item(atRow: outline.selectedRow) as? TreeNode : nil
+    }
 
     override func loadView() {
         let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 240, height: 600))
@@ -127,6 +135,12 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource, NS
         menu.delegate = self
         outline.menu = menu
 
+        let promiseTypes = NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) }
+        outline.registerForDraggedTypes([.fileURL] + promiseTypes)
+        outline.setDraggingSourceOperationMask([.copy, .move, .generic], forLocal: true)
+        outline.setDraggingSourceOperationMask([.copy, .move, .generic, .link, .delete], forLocal: false)
+        outline.draggingDestinationFeedbackStyle = .regular
+
         scroll.documentView = outline
         view = scroll
     }
@@ -142,6 +156,7 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource, NS
         let nc = NotificationCenter.default
         nc.addObserver(self, selector: #selector(settingsChanged), name: .settingsChanged, object: nil)
         nc.addObserver(self, selector: #selector(favoritesChanged), name: .favoritesChanged, object: nil)
+        nc.addObserver(self, selector: #selector(settingsChanged), name: .filesChanged, object: nil)
         let ws = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification, NSWorkspace.didRenameVolumeNotification] {
             ws.addObserver(self, selector: #selector(volumesChanged), name: name, object: nil)
@@ -350,11 +365,7 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource, NS
         menu.removeAllItems()
         let row = outline.clickedRow
         guard row >= 0, let node = outline.item(atRow: row) as? TreeNode, let url = node.url else { return }
-
-        let open = NSMenuItem(title: "Öffnen", action: #selector(menuOpen(_:)), keyEquivalent: "")
-        open.target = self
-        open.representedObject = row
-        menu.addItem(open)
+        delegate?.sidebar(self, buildMenu: menu, node: node)
 
         guard node.isFolder else { return }
         menu.addItem(.separator())
@@ -366,8 +377,69 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource, NS
         menu.addItem(pin)
     }
 
-    @objc private func menuOpen(_ sender: NSMenuItem) {
-        if let row = sender.representedObject as? Int { activate(row: row) }
+    func outlineViewSelectionDidChange(_ notification: Notification) {
+        delegate?.sidebarSelectionChanged(self)
+    }
+
+    // MARK: - Drag & drop
+
+    func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
+        // Only real entries can be dragged – never the shortcuts like "Dokumente" or whole drives.
+        guard let node = item as? TreeNode, node.kind == .entry, let url = node.url else { return nil }
+        return url as NSURL
+    }
+
+    /// Hovering over a closed folder during a drag opens it after a short moment.
+    private func scheduleHoverExpand(_ node: TreeNode?) {
+        guard node !== hoverNode else { return }
+        hoverNode = node
+        hoverTimer?.invalidate()
+        hoverTimer = nil
+        guard let node, !outline.isItemExpanded(node) else { return }
+        let timer = Timer(timeInterval: 0.7, repeats: false) { [weak self] _ in
+            guard let self, self.hoverNode === node else { return }
+            self.outline.expandItem(node)
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        hoverTimer = timer
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?,
+                     proposedChildIndex index: Int) -> NSDragOperation {
+        guard let node = item as? TreeNode else { scheduleHoverExpand(nil); return [] }
+        scheduleHoverExpand(node.kind == .section ? nil : node)
+
+        if node === favorites {
+            // Drop folders onto "Favoriten" to pin them.
+            let urls = DropRules.urls(info)
+            let current = Settings.shared.favorites
+            let ok = !urls.isEmpty && urls.allSatisfy { DirectoryReader.isDirectory($0) && FileOps.shared.isPlainFolder($0) && !current.contains($0) }
+            return ok ? .link : []
+        }
+        guard node.kind != .section, node.isFolder, let url = node.url else { return [] }
+        if index != NSOutlineViewDropOnItemIndex {
+            outlineView.setDropItem(node, dropChildIndex: NSOutlineViewDropOnItemIndex)
+        }
+        return DropRules.operation(info, into: url)
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
+        scheduleHoverExpand(nil)
+        guard let node = item as? TreeNode else { return false }
+        if node === favorites {
+            var list = Settings.shared.favorites
+            let urls = DropRules.urls(info).filter { !list.contains($0) }
+            let position = index >= 0 ? min(index, list.count) : list.count
+            list.insert(contentsOf: urls, at: position)
+            Settings.shared.favorites = list
+            return true
+        }
+        guard let url = node.url else { return false }
+        return DropRules.accept(info, into: url)
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        scheduleHoverExpand(nil)
     }
 
     @objc private func toggleFavorite(_ sender: NSMenuItem) {
