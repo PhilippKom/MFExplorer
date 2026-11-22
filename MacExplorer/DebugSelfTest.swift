@@ -115,6 +115,40 @@ final class DebugSelfTest {
                 next()
             }
         }
+        step("merge folders (copy)") { next in
+            // M1 and M2/M1 exist; copying M2/M1 into the root must merge, not ask.
+            for path in ["M1/alt.txt", "M2/M1/neu.txt", "M2/M1/Unter/tief.txt"] {
+                try? self.fm.createDirectory(at: self.url(path).deletingLastPathComponent(), withIntermediateDirectories: true)
+                self.fm.createFile(atPath: self.url(path).path, contents: Data(path.utf8))
+            }
+            self.ops.transfer([self.url("M2/M1")], into: self.root, kind: .copy) { results in
+                self.check("merge copy: old file kept", self.exists("M1/alt.txt"))
+                self.check("merge copy: new files added", self.exists("M1/neu.txt") && self.exists("M1/Unter/tief.txt"))
+                self.check("merge copy: source untouched", self.exists("M2/M1/neu.txt"))
+                self.check("merge copy: no 'M1 (2)' created", !self.exists("M1 (2)"))
+                self.check("merge copy: result is the merged folder", results.map(\.lastPathComponent) == ["M1"])
+                self.check("merge copy: notice shown", (FileOps.collectedErrors ?? []).contains { $0.hasPrefix("NOTICE") })
+                next()
+            }
+        }
+        step("undo merge copy") { next in
+            self.ops.undoManager.undo()
+            self.check("undo merge copy: only added files removed", self.exists("M1/alt.txt") && !self.exists("M1/neu.txt") && !self.exists("M1/Unter"))
+            next()
+        }
+        step("merge folders (move)") { next in
+            self.ops.transfer([self.url("M2/M1")], into: self.root, kind: .move) { _ in
+                self.check("merge move: files arrived", self.exists("M1/neu.txt") && self.exists("M1/Unter/tief.txt") && self.exists("M1/alt.txt"))
+                self.check("merge move: empty source folder gone", !self.exists("M2/M1"))
+                next()
+            }
+        }
+        step("undo merge move") { next in
+            self.ops.undoManager.undo()
+            self.check("undo merge move: source back complete", self.exists("M2/M1/neu.txt") && self.exists("M2/M1/Unter/tief.txt"))
+            self.check("undo merge move: target as before", self.exists("M1/alt.txt") && !self.exists("M1/neu.txt"))
+            next()
+        }
         step("drop rules") { next in
             self.check("unique name keeps extension", self.ops.uniqueURL(in: self.url("B"), name: "file.txt", splitExtension: true).lastPathComponent == "file (2).txt")
             next()
@@ -132,7 +166,7 @@ final class DebugSelfTest {
     }
 
     private func finish() {
-        for error in FileOps.collectedErrors ?? [] { log.append("ERROR-ALERT " + error) }
+        for error in FileOps.collectedErrors ?? [] where !error.hasPrefix("NOTICE") { log.append("ERROR-ALERT " + error) }
         let failed = log.filter { $0.hasPrefix("FAIL") }.count
         log.append(failed == 0 ? "ALL PASSED" : "\(failed) FAILED")
         try? log.joined(separator: "\n").write(to: logURL, atomically: true, encoding: .utf8)

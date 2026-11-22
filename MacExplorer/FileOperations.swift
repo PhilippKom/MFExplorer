@@ -249,6 +249,16 @@ final class FileOps {
         let source: URL
         let destination: URL
         let replacing: URL?
+        /// What to select afterwards: the item itself, or the top folder it was merged into.
+        let reported: URL
+    }
+
+    struct TransferPlan {
+        var items: [TransferItem] = []
+        /// Existing folders that received the content of a same-named folder (Windows-style merge).
+        var merged: [URL] = []
+        /// When moving: merged source folders, deepest first. They go to the Trash once they are empty.
+        var emptiedSources: [URL] = []
     }
 
     private enum ConflictAction { case replace, skip, keepBoth }
@@ -289,41 +299,55 @@ final class FileOps {
     }
 
     /// Decides where every item goes and asks about name conflicts. nil = cancelled.
-    func plan(_ sources: [URL], into folder: URL, kind: TransferKind) -> [TransferItem]? {
-        let folder = folder.standardizedFileURL
-        var items: [TransferItem] = []
+    /// Same-named folders are merged like on Windows: only same-named files inside lead to a question.
+    func plan(_ sources: [URL], into folder: URL, kind: TransferKind) -> TransferPlan? {
+        var plan = TransferPlan()
         var taken = Set<String>()
         var remembered: ConflictAction?
         var errors: [String] = []
 
-        for raw in sources {
-            let source = raw.standardizedFileURL
+        /// Returns false if the user pressed "Abbrechen".
+        func add(_ source: URL, into folder: URL, reported: URL?) -> Bool {
             let parent = source.deletingLastPathComponent().standardizedFileURL
             if source.path == folder.path || folder.path.hasPrefix(source.path + "/") {
                 errors.append("„\(source.lastPathComponent)“ kann nicht in sich selbst \(kind == .copy ? "kopiert" : "verschoben") werden.")
-                continue
+                return true
             }
             if parent.path == folder.path {
-                if kind == .move { continue }   // already here
+                if kind == .move { return true }   // already here
                 let destination = uniqueURL(for: source, in: folder, suffix: " - Kopie", taken: taken)
                 taken.insert(destination.path)
-                items.append(TransferItem(source: source, destination: destination, replacing: nil))
-                continue
+                plan.items.append(TransferItem(source: source, destination: destination, replacing: nil, reported: reported ?? destination))
+                return true
             }
             var destination = folder.appendingPathComponent(source.lastPathComponent)
             var replacing: URL?
+
+            // Folder onto a same-named folder: merge the contents.
+            if exists(destination), !taken.contains(destination.path),
+               isPlainFolder(source), isPlainFolder(destination),
+               !source.path.hasPrefix(destination.path + "/"), !destination.path.hasPrefix(source.path + "/") {
+                if reported == nil { plan.merged.append(destination) }
+                let children = (try? fm.contentsOfDirectory(at: source, includingPropertiesForKeys: nil)) ?? []
+                for child in children where child.lastPathComponent != ".DS_Store" {
+                    if !add(child.standardizedFileURL, into: destination, reported: reported ?? destination) { return false }
+                }
+                if kind == .move { plan.emptiedSources.append(source) }
+                return true
+            }
+
             if exists(destination) || taken.contains(destination.path) {
                 let action: ConflictAction
                 if let remembered {
                     action = remembered
                 } else {
-                    guard let answer = askConflict(existing: destination, incoming: source, offerApplyAll: sources.count > 1) else { return nil }
+                    guard let answer = askConflict(existing: destination, incoming: source, offerApplyAll: true) else { return false }
                     action = answer.0
                     if answer.1 { remembered = answer.0 }
                 }
                 switch action {
                 case .skip:
-                    continue
+                    return true
                 case .replace where !taken.contains(destination.path) && !source.path.hasPrefix(destination.path + "/"):
                     replacing = destination
                 case .replace, .keepBoth:
@@ -331,22 +355,52 @@ final class FileOps {
                 }
             }
             taken.insert(destination.path)
-            items.append(TransferItem(source: source, destination: destination, replacing: replacing))
+            plan.items.append(TransferItem(source: source, destination: destination, replacing: replacing, reported: reported ?? destination))
+            return true
+        }
+
+        let target = folder.standardizedFileURL
+        for raw in sources {
+            if !add(raw.standardizedFileURL, into: target, reported: nil) { return nil }
         }
         Self.showErrors("Hinweis", errors)
-        return items
+        return plan
+    }
+
+    /// Info after a merge. Can be switched off with "Nicht mehr anzeigen".
+    private func showMergeNotice(_ folders: [URL], kind: TransferKind) {
+        guard !folders.isEmpty, !UserDefaults.standard.bool(forKey: "hideMergeNotice") else { return }
+        let names = folders.prefix(5).map { "„\(FileManager.default.displayName(atPath: $0.path))“" }.joined(separator: ", ")
+        let text = (folders.count == 1 ? "Den Ordner \(names) gab es im Ziel schon." : "Die Ordner \(names) gab es im Ziel schon.")
+            + " Der Inhalt wurde in den vorhandenen Ordner übernommen (zusammengeführt)."
+            + " Gleichnamige Dateien darin wurden wie von dir gewählt behandelt."
+            + (kind == .move ? " Der leere Quellordner liegt im Papierkorb." : "")
+            + "\n\nMit ⌘Z machst du alles rückgängig."
+        #if DEBUG
+        if Self.collectedErrors != nil { Self.collectedErrors?.append("NOTICE: " + text); return }
+        #endif
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Ordner zusammengeführt"
+        alert.informativeText = text
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = "Diesen Hinweis nicht mehr anzeigen"
+        alert.runModal()
+        if alert.suppressionButton?.state == .on { UserDefaults.standard.set(true, forKey: "hideMergeNotice") }
     }
 
     /// Copies or moves `sources` into `folder`. Big jobs show a progress window with "Abbrechen".
     func transfer(_ sources: [URL], into folder: URL, kind: TransferKind, completion: (([URL]) -> Void)? = nil) {
-        guard let items = plan(sources, into: folder, kind: kind), !items.isEmpty else { return }
+        guard let transferPlan = plan(sources, into: folder, kind: kind),
+              !transferPlan.items.isEmpty || !transferPlan.merged.isEmpty else { return }
+        let items = transferPlan.items
         let verb = kind == .copy ? "Kopieren" : "Verschieben"
         let job = ProgressJob(title: "\(verb) nach „\(FileManager.default.displayName(atPath: folder.path))“", itemCount: items.count)
         let panel = ProgressPanel(job: job)
         panel.showAfterDelay()
 
         DispatchQueue.global(qos: .userInitiated).async {
-            let instant = items.map { kind == .move && self.sameVolume($0.source.deletingLastPathComponent(), folder) }
+            let instant = items.map { kind == .move && self.sameVolume($0.source.deletingLastPathComponent(), $0.destination.deletingLastPathComponent()) }
             let sizes = items.indices.map { instant[$0] ? Int64(0) : Self.totalSize(of: items[$0].source) }
             job.setTotal(sizes.reduce(0, +))
 
@@ -372,16 +426,27 @@ final class FileOps {
                             changes.append(.trashed(original: item.source, trashURL: location))
                         }
                     }
-                    results.append(item.destination)
+                    if !results.contains(item.reported) { results.append(item.reported) }
                 } catch {
                     if !job.isCancelled { errors.append("„\(item.source.lastPathComponent)“: \(error.localizedDescription)") }
                 }
                 job.endItem(addingBytes: sizes[index])
             }
+            // Moving merged folders: the emptied source folders go to the Trash (only if really empty).
+            if kind == .move && !job.isCancelled {
+                for source in transferPlan.emptiedSources {
+                    let left = ((try? self.fm.contentsOfDirectory(atPath: source.path)) ?? []).filter { $0 != ".DS_Store" }
+                    guard left.isEmpty, let location = try? self.trash(source) else { continue }
+                    changes.append(.trashed(original: source, trashURL: location))
+                }
+            }
+            for merged in transferPlan.merged where !results.contains(merged) { results.append(merged) }
+            let cancelled = job.isCancelled
             DispatchQueue.main.async {
                 panel.close()
                 self.registerUndo(changes, name: verb)
                 Self.showErrors("Beim \(verb) gab es Probleme", errors)
+                if !cancelled { self.showMergeNotice(transferPlan.merged, kind: kind) }
                 completion?(results)
             }
         }
