@@ -53,3 +53,5 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - In Debug-Builds startet der Updater nicht (keine Update-Dialoge bei Tests).
 - Neue Version veröffentlichen, nur mit ausdrücklichem OK des Nutzers: `Tools/release.sh <Version> <notizen.md>`. Das Skript erhöht die Build-Nummer, baut, unterschreibt, erstellt das GitHub-Release und ergänzt danach `appcast.xml`.
 - Git-Absender in diesem Repo: `PhilippKom <72168776+PhilippKom@users.noreply.github.com>`. Niemals die private E-Mail-Adresse verwenden.
+
+- Gesammelte, noch nicht veröffentlichte Änderungen stehen in `CHANGELOG.md` unter „Unveröffentlicht“. Beim Release daraus die Notizen machen (nur Neuerungen, keine Installationsanleitung – sie erscheinen im Update-Fenster der App) und den Abschnitt in die neue Version umbenennen.
