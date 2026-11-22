@@ -252,8 +252,20 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         updateChrome()
     }
 
+    /// "MFExplorer – v1.1" at the top of every window.
+    static let appTitle: String = {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        return version.isEmpty ? "MFExplorer" : "MFExplorer – v\(version)"
+    }()
+
+    /// The window shows the app name and version; each tab keeps the folder name so tabs stay distinguishable.
+    private func setFolderTitle(_ folder: String) {
+        window?.title = Self.appTitle
+        window?.tab.title = folder
+    }
+
     private func updateChrome() {
-        window?.title = FileManager.default.displayName(atPath: currentURL.path)
+        setFolderTitle(FileManager.default.displayName(atPath: currentURL.path))
         // No proxy icon (representedURL): in tabs it sat where the close "x" appears and pushed it away on hover.
         window?.tab.toolTip = currentURL.path
         addressBar.update(url: currentURL, canGoBack: !backStack.isEmpty,
@@ -413,10 +425,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     private func search(_ query: String) {
         if query.isEmpty {
             fileListVC.endSearch()
-            window?.title = FileManager.default.displayName(atPath: currentURL.path)
+            setFolderTitle(FileManager.default.displayName(atPath: currentURL.path))
         } else {
             fileListVC.startSearch(query, in: currentURL)
-            window?.title = "Suche: \(query)"
+            setFolderTitle("Suche: \(query)")
         }
     }
 

@@ -112,7 +112,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let after = self.windowControllers.count
                     let tabs = self.windowControllers.first?.window?.tabbedWindows?.count ?? 1
                     let ok = before == 3 && after == 2
-                    try? "\(ok ? "PASS" : "FAIL") tabs before=\(before) after=\(after) tabGroup=\(tabs)".write(toFile: path, atomically: true, encoding: .utf8)
+                    let titles = self.windowControllers.map { "[\($0.window?.title ?? "") | Tab: \($0.window?.tab.title ?? "")]" }.joined(separator: " ")
+                    try? "\(ok ? "PASS" : "FAIL") tabs before=\(before) after=\(after) tabGroup=\(tabs) \(titles)".write(toFile: path, atomically: true, encoding: .utf8)
                     NSApp.terminate(nil)
                 }
             }
