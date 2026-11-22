@@ -6,5 +6,14 @@
     <description>Updates für MFExplorer</description>
     <language>de</language>
     <!-- Neue Versionen fügt Tools/release.sh hier oben ein. -->
+    <item>
+      <title>Version 1.1</title>
+      <pubDate>Sun, 22 Nov 2026 18:13:15 +0100</pubDate>
+      <sparkle:version>2</sparkle:version>
+      <sparkle:shortVersionString>1.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<h3>Neu in Version 1.1</h3><ul><li>MFExplorer sucht jetzt selbst nach neuen Versionen und installiert sie auf Wunsch (Sparkle).</li><li>Menüpunkt „MFExplorer → Nach Updates suchen …“</li><li>In den Einstellungen: automatische Update-Suche ein/aus, „Jetzt suchen“</li><li>Updates sind digital unterschrieben, gefälschte Updates werden abgelehnt.</li></ul><h3>Installation</h3><p>1. `MFExplorer-1.1.zip` unten herunterladen und doppelklicken.</p><p>2. `MFExplorer.app` in den Ordner Programme ziehen und eine ältere Version ersetzen.</p><p>3. Beim ersten Öffnen warnt macOS, weil die App nicht von Apple beglaubigt ist. Öffne Systemeinstellungen → Datenschutz &amp; Sicherheit und klicke dort auf „Trotzdem öffnen“.</p><p>Ab dieser Version kommen künftige Updates automatisch. Wer noch Version 1.0 hat, muss 1.1 einmal von Hand installieren.</p>]]></description>
+      <enclosure url="https://github.com/PhilippKom/MFExplorer/releases/download/v1.1/MFExplorer-1.1.zip" type="application/octet-stream" sparkle:edSignature="pwa7eGAKIleWQA97kVtw+w/qE4km9k+Kjc2LiwtdOi8TFgvlJ1qmnDnPh3O4tkjnf9WB0LsgxSQ5hn94+N56Bg==" length="2036516" />
+    </item>
   </channel>
 </rss>
