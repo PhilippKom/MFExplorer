@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             guard let controller = self?.windowControllers.first else { return }
             let list = controller.fileListVC
+            controller.window?.makeKeyAndOrderFront(nil)
             let started = Date()
             list.startSearch(word, in: controller.currentURL)
             func poll() {
@@ -49,6 +50,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 let seconds = String(format: "%.1f", Date().timeIntervalSince(started))
                 _ = list.debugSearchReport()   // starts reading the lines
+                if UserDefaults.standard.bool(forKey: "searchTestOpenLocation"), let hit = list.items.first(where: { !$0.isFolder }) {
+                    // Simulates right-click > "Speicherort öffnen" on the first file.
+                    let item = NSMenuItem()
+                    item.representedObject = ActionContext(urls: [hit.url], folder: controller.currentURL)
+                    controller.openContainingFolder(item)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        let windows = self?.windowControllers ?? []
+                        let newWindow = windows.last
+                        let lines = [
+                            "windows=\(windows.count) (erwartet 2)",
+                            "altes Fenster sucht noch: \(controller.fileListVC.searchQuery != nil) treffer=\(controller.fileListVC.items.count)",
+                            "neues Fenster Ordner: \(newWindow?.currentURL.path ?? "-") (erwartet \(hit.url.deletingLastPathComponent().path))",
+                            "neues Fenster markiert: \(newWindow?.fileListVC.selectedItems.map(\.url.lastPathComponent) ?? []) (erwartet [\(hit.url.lastPathComponent)])",
+                            "neues Fenster ist vorne: \(newWindow?.window?.isKeyWindow == true)",
+                        ]
+                        try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+                        NSApp.terminate(nil)
+                    }
+                    return
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     let lines = ["running=\(list.isSearchRunning) after \(seconds)s"] + list.debugSearchReport()
                     try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
@@ -137,8 +158,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Creates a window (used for new windows and new tabs) and keeps it alive until it is closed.
-    func makeController(at url: URL) -> MainWindowController {
-        let controller = MainWindowController(url: url)
+    func makeController(at url: URL, select: [URL] = []) -> MainWindowController {
+        let controller = MainWindowController(url: url, select: select)
         controller.onClose = { [weak self, weak controller] in
             self?.windowControllers.removeAll { $0 === controller }
         }
@@ -146,9 +167,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return controller
     }
 
-    func openWindow(at url: URL) {
-        let previousWindow = windowControllers.last?.window
-        let controller = makeController(at: url)
+    func openWindow(at url: URL, select: [URL] = []) {
+        let previousWindow = NSApp.keyWindow ?? windowControllers.last?.window
+        let controller = makeController(at: url, select: select)
         if let previous = previousWindow, let window = controller.window {
             window.setFrameTopLeftPoint(NSPoint(x: previous.frame.minX + 26, y: previous.frame.maxY - 26))
         }

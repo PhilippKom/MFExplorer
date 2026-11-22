@@ -65,7 +65,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     private var keyMonitor: Any?
     var onClose: (() -> Void)?
 
-    init(url: URL) {
+    /// `select`: items to highlight right away (e.g. the file from "Speicherort öffnen").
+    init(url: URL, select: [URL] = []) {
         currentURL = url.standardizedFileURL
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 680),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -103,7 +104,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         for name in [Notification.Name.clipboardChanged, .NSUndoManagerDidCloseUndoGroup, .NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange] {
             nc.addObserver(self, selector: #selector(updateCommandBar), name: name, object: nil)
         }
-        navigate(to: currentURL, record: false)
+        navigate(to: currentURL, record: false, select: select)
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -484,9 +485,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     }
 
     /// From a search result: open the folder that contains it and select it.
+    /// From a search result: open the folder in a NEW window with the file selected.
+    /// This window keeps its search results.
     @objc func openContainingFolder(_ sender: Any?) {
         guard let url = context(sender).urls.first else { return }
-        navigate(to: url.deletingLastPathComponent(), select: [url])
+        (NSApp.delegate as? AppDelegate)?.openWindow(at: url.deletingLastPathComponent(), select: [url])
     }
 
     @objc func revealInFinder(_ sender: Any?) {
