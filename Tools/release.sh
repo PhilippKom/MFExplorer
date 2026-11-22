@@ -44,7 +44,7 @@ SIGNATURE=$("$PACKAGES/artifacts/sparkle/Sparkle/bin/sign_update" --account mfex
 echo "→ Signiert: $SIGNATURE"
 
 # 4. Commit the version number, push, create the GitHub release with the ZIP
-git commit -qam "Version $VERSION"
+git diff --quiet || git commit -qam "Version $VERSION"
 git push -q
 gh release create "v$VERSION" "$ZIP" --title "Version $VERSION" --notes-file "$NOTES"
 
