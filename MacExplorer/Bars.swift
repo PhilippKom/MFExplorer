@@ -327,6 +327,8 @@ final class CommandBarView: NSView {
     private let shareButton = BarButton.make(symbol: "square.and.arrow.up", tip: "Teilen", action: #selector(MainWindowController.shareItems(_:)))
     private let trashButton = BarButton.make(symbol: "trash", tip: "In den Papierkorb legen (⌫)", action: #selector(MainWindowController.moveToTrash(_:)))
     private let undoButton = BarButton.make(symbol: "arrow.uturn.backward", tip: "Rückgängig (⌘Z)", action: Selector(("undo:")))
+    private let previewButton = BarButton.make(symbol: "sidebar.right", title: "Vorschau", tip: "Vorschaubereich ein/aus (⌥⌘P)",
+                                               action: #selector(MainWindowController.togglePreviewPane(_:)))
 
     init(newMenu: @escaping () -> NSMenu, sortMenu: @escaping () -> NSMenu, viewMenu: @escaping () -> NSMenu, moreMenu: @escaping () -> NSMenu) {
         super.init(frame: .zero)
@@ -362,9 +364,15 @@ final class CommandBarView: NSView {
         stack.addView(undoButton, in: .leading)
         stack.addView(more, in: .leading)
         stack.addView(reveal, in: .trailing)
+        stack.addView(previewButton, in: .trailing)
+        previewButton.setButtonType(.pushOnPushOff)
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    func setPreviewVisible(_ visible: Bool) {
+        previewButton.state = visible ? .on : .off
+    }
 
     func update(hasSelection: Bool, canModify: Bool, canPaste: Bool, canUndo: Bool) {
         cutButton.isEnabled = canModify

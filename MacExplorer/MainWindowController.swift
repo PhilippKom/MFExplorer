@@ -1,4 +1,5 @@
 import AppKit
+import Quartz
 
 final class RootViewController: NSViewController {
     override func loadView() {
@@ -37,7 +38,8 @@ final class OpenWithRequest: NSObject {
 
 /// One explorer window: address bar, command bar, sidebar tree, details view and status bar.
 /// The sidebar and the main view navigate independently of each other.
-final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuItemValidation, SidebarDelegate, FileListDelegate {
+final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuItemValidation, SidebarDelegate, FileListDelegate,
+    QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     static let finderTags: [(String, NSColor)] = [
         ("Rot", .systemRed), ("Orange", .systemOrange), ("Gelb", .systemYellow), ("Grün", .systemGreen),
         ("Blau", .systemBlue), ("Lila", .systemPurple), ("Grau", .systemGray),
@@ -48,6 +50,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     let sidebarVC = SidebarViewController()
     let fileListVC = FileListViewController()
     private var sidebarItem: NSSplitViewItem!
+    let previewVC = PreviewPaneViewController()
+    private var previewSplitItem: NSSplitViewItem!
+    private var quickLookItems: [PreviewItem] = []
+    private let quickLookBuilder = PreviewBuilder()
+    private var quickLookActive = false
     private let addressBar = AddressBarView()
     private var commandBar: CommandBarView!
     private let statusBar = StatusBarView()
@@ -87,6 +94,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         }
         addressBar.breadcrumb.onCancel = { [weak self] in self?.focusFileList() }
         installKeyMonitor()
+        commandBar.setPreviewVisible(!previewSplitItem.isCollapsed)
 
         let nc = NotificationCenter.default
         for name in [Notification.Name.clipboardChanged, .NSUndoManagerDidCloseUndoGroup, .NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange] {
@@ -106,11 +114,18 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         sidebarItem.canCollapse = true
         let contentItem = NSSplitViewItem(viewController: fileListVC)
         contentItem.minimumThickness = 300
+        previewSplitItem = NSSplitViewItem(viewController: previewVC)
+        previewSplitItem.canCollapse = true
+        previewSplitItem.minimumThickness = 220
+        previewSplitItem.maximumThickness = 900
+        previewSplitItem.holdingPriority = NSLayoutConstraint.Priority(255)
         splitVC.addSplitViewItem(sidebarItem)
         splitVC.addSplitViewItem(contentItem)
+        splitVC.addSplitViewItem(previewSplitItem)
         splitVC.splitView.dividerStyle = .thin
         splitVC.splitView.autosaveName = "MainSplit"
         rootVC.addChild(splitVC)
+        previewSplitItem.isCollapsed = !UserDefaults.standard.bool(forKey: "showPreviewPane")
 
         let root = rootVC.view
         func separator() -> NSBox {
@@ -176,6 +191,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             case (124, .option) where !inTree: self.goForward(nil)  // ⌥→
             case (96, []): self.refresh(nil)                        // F5
             case (51, []), (117, []): self.moveToTrash(nil)         // ⌫ and forward delete
+            case (49, []): self.toggleQuickLook(nil)                // space
+            case (35, .option): self.togglePreviewPane(nil)         // ⌥P (Windows: Alt+P)
             default: return event
             }
             return nil
@@ -212,6 +229,96 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         let size: Int64? = files.isEmpty ? nil : files.compactMap(\.size).reduce(0, +)
         statusBar.update(total: fileListVC.items.count, selected: selected.count, selectedSize: size)
         updateCommandBar()
+        updatePreview()
+    }
+
+    // MARK: - Preview pane and Quick Look
+
+    private func updatePreview() {
+        let urls = context(nil).urls
+        if !previewSplitItem.isCollapsed { previewVC.show(urls) }
+        if quickLookActive, let panel = QLPreviewPanel.shared(), panel.isVisible {
+            quickLookItems = makeQuickLookItems()
+            panel.reloadData()
+        }
+    }
+
+    @objc func togglePreviewPane(_ sender: Any?) {
+        let show = previewSplitItem.isCollapsed
+        UserDefaults.standard.set(show, forKey: "showPreviewPane")
+        previewSplitItem.animator().isCollapsed = !show
+        if show { previewVC.show(context(nil).urls) } else { previewVC.clear() }
+        commandBar.setPreviewVisible(show)
+    }
+
+    private func makeQuickLookItems() -> [PreviewItem] {
+        let ctx = context(nil)
+        let urls = ctx.urls.isEmpty ? [currentURL] : ctx.urls
+        return quickLookBuilder.items(for: urls) { item in
+            guard let panel = QLPreviewPanel.shared(), panel.isVisible, panel.currentPreviewItem === item else { return }
+            panel.refreshCurrentPreviewItem()
+        }
+    }
+
+    /// Space bar: open / close Quick Look (like Finder). Folders show item count, size and dates.
+    @objc func toggleQuickLook(_ sender: Any?) {
+        guard let panel = QLPreviewPanel.shared() else { return }
+        if QLPreviewPanel.sharedPreviewPanelExists() && panel.isVisible {
+            panel.orderOut(nil)
+        } else {
+            panel.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
+
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        quickLookActive = true
+        quickLookItems = makeQuickLookItems()
+        panel.dataSource = self
+        panel.delegate = self
+        panel.reloadData()
+    }
+
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        quickLookActive = false
+        quickLookBuilder.cancel()
+        quickLookItems = []
+        panel.dataSource = nil
+        panel.delegate = nil
+    }
+
+    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { quickLookItems.count }
+
+    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
+        index < quickLookItems.count ? quickLookItems[index] : nil
+    }
+
+    func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
+        guard let event, event.type == .keyDown else { return false }
+        switch event.keyCode {
+        case 49:   // space closes, like in Finder
+            panel.orderOut(nil)
+            return true
+        case 125, 126:   // up / down: move the selection in the list, the preview follows
+            if quickLookItems.count <= 1 || fileListVC.selectedItems.count <= 1 {
+                fileListVC.tableView.keyDown(with: event)
+                return true
+            }
+            return false
+        default:
+            return false
+        }
+    }
+
+    func previewPanel(_ panel: QLPreviewPanel!, sourceFrameOnScreenFor item: QLPreviewItem!) -> NSRect {
+        guard let item = item as? PreviewItem, let window,
+              let row = fileListVC.items.firstIndex(where: { $0.url == item.source }) else { return .zero }
+        let table = fileListVC.tableView
+        let rect = table.rect(ofRow: row)
+        guard table.visibleRect.intersects(rect) else { return .zero }
+        let iconRect = NSRect(x: rect.minX + 4, y: rect.minY + 3, width: 16, height: 16)
+        return window.convertToScreen(table.convert(iconRect, to: nil))
     }
 
     @objc private func updateCommandBar() {
@@ -566,7 +673,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     private func makeViewMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Seitenleiste", action: #selector(toggleSidebarPane(_:)), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Vorschaubereich (kommt in Meilenstein 3)", action: nil, keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Vorschaubereich", action: #selector(togglePreviewPane(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Schnellansicht (Leertaste)", action: #selector(toggleQuickLook(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Versteckte Dateien anzeigen", action: #selector(toggleHiddenFiles(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Dateien im Baum ausblenden", action: #selector(toggleFilesInTree(_:)), keyEquivalent: ""))
@@ -733,6 +841,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             } else {
                 item.title = sidebarItem.isCollapsed ? "Seitenleiste einblenden" : "Seitenleiste ausblenden"
             }
+        case #selector(togglePreviewPane(_:)):
+            if item.keyEquivalent.isEmpty {
+                item.state = previewSplitItem.isCollapsed ? .off : .on
+            } else {
+                item.title = previewSplitItem.isCollapsed ? "Vorschaubereich einblenden" : "Vorschaubereich ausblenden"
+            }
         case #selector(sortByColumn(_:)):
             item.state = (item.representedObject as? String) == fileListVC.sortKey ? .on : .off
         case #selector(sortAscending(_:)):
@@ -752,6 +866,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
     func sidebarSelectionChanged(_ sidebar: SidebarViewController) {
         updateCommandBar()
+        updatePreview()
     }
 
     func fileList(_ list: FileListViewController, openFolder url: URL) {

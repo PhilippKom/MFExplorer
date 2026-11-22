@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowControllers: [MainWindowController] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        FolderInfoPage.cleanUp()
         NSApp.mainMenu = MainMenu.build()
         openWindow(at: startURL())
         NSApp.activate(ignoringOtherApps: true)
@@ -39,7 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             guard let controller = self?.windowControllers.first, let view = controller.window?.contentView else { return }
             if defaults.bool(forKey: "debugReveal") { controller.revealInTree(nil) }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            if let name = defaults.string(forKey: "debugSelect") {
+                controller.fileListVC.load(controller.currentURL, select: [controller.currentURL.appendingPathComponent(name)])
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(0.8, defaults.double(forKey: "debugSnapDelay"))) {
                 guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
                 view.cacheDisplay(in: view.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
@@ -153,6 +157,9 @@ enum MainMenu {
             item("Seitenleiste ausblenden", #selector(MainWindowController.toggleSidebarPane(_:)), "s", [.command, .control]),
             item("Versteckte Dateien anzeigen", #selector(MainWindowController.toggleHiddenFiles(_:)), ".", [.command, .shift]),
             item("Dateien im Baum ausblenden", #selector(MainWindowController.toggleFilesInTree(_:))),
+            sep(),
+            item("Vorschaubereich einblenden", #selector(MainWindowController.togglePreviewPane(_:)), "p", [.command, .option]),
+            item("Schnellansicht (Leertaste)", #selector(MainWindowController.toggleQuickLook(_:))),
             sep(),
             item("Aktualisieren", #selector(MainWindowController.refresh(_:)), "r"),
         ])
