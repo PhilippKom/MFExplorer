@@ -65,10 +65,19 @@ final class AddressBarView: NSView {
     let upButton = BarButton.make(symbol: "arrow.up", tip: "Eine Ebene nach oben (⌘↑ oder ⌥↑)", action: #selector(MainWindowController.goUp(_:)))
     let refreshButton = BarButton.make(symbol: "arrow.clockwise", tip: "Aktualisieren (⌘R oder F5)", action: #selector(MainWindowController.refresh(_:)))
     let breadcrumb = BreadcrumbView()
+    let searchField = NSSearchField()
+    var onSearch: ((String) -> Void)?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        let stack = NSStackView(views: [backButton, forwardButton, upButton, refreshButton, breadcrumb])
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+        searchField.widthAnchor.constraint(equalToConstant: 230).isActive = true
+        searchField.sendsSearchStringImmediately = false
+        searchField.sendsWholeSearchString = false
+        searchField.target = self
+        searchField.action = #selector(searchChanged(_:))
+        searchField.toolTip = "Sucht nach Namen im aktuellen Ordner und allen Unterordnern (⌘F)"
+        let stack = NSStackView(views: [backButton, forwardButton, upButton, refreshButton, breadcrumb, searchField])
         stack.orientation = .horizontal
         stack.spacing = 2
         stack.setCustomSpacing(8, after: refreshButton)
@@ -87,11 +96,18 @@ final class AddressBarView: NSView {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    @objc private func searchChanged(_ sender: NSSearchField) {
+        onSearch?(sender.stringValue.trimmingCharacters(in: .whitespaces))
+    }
+
+    func clearSearch() { searchField.stringValue = "" }
+
     func update(url: URL, canGoBack: Bool, canGoForward: Bool, canGoUp: Bool) {
         backButton.isEnabled = canGoBack
         forwardButton.isEnabled = canGoForward
         upButton.isEnabled = canGoUp
         breadcrumb.url = url
+        searchField.placeholderString = "Durchsuchen: \(FileManager.default.displayName(atPath: url.path))"
     }
 }
 
@@ -407,8 +423,9 @@ final class StatusBarView: NSView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func update(total: Int, selected: Int, selectedSize: Int64?) {
+    func update(total: Int, selected: Int, selectedSize: Int64?, searching: Bool? = nil) {
         var text = Format.count(total)
+        if let searching { text = (searching ? "Suche läuft … " : "Suche fertig: ") + (total == 1 ? "1 Treffer" : "\(total) Treffer") }
         if selected > 0 {
             text += "     |     " + (selected == 1 ? "1 Element ausgewählt" : "\(selected) Elemente ausgewählt")
             if let selectedSize { text += "   " + Format.size(selectedSize) }

@@ -38,8 +38,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let defaults = UserDefaults.standard
         guard let path = defaults.string(forKey: "snapshotPath") else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-            guard let controller = self?.windowControllers.first, let view = controller.window?.contentView else { return }
+            guard let controller = self?.windowControllers.first, let mainView = controller.window?.contentView else { return }
             if defaults.bool(forKey: "debugReveal") { controller.revealInTree(nil) }
+            if let query = defaults.string(forKey: "debugSearch") {
+                controller.fileListVC.startSearch(query, in: controller.currentURL)
+            }
+            var view = mainView
+            if defaults.bool(forKey: "debugSettings") {
+                SettingsWindowController.show()
+                if let settingsView = NSApp.windows.first(where: { $0.title == "Einstellungen" })?.contentView { view = settingsView }
+            }
             if let name = defaults.string(forKey: "debugSelect") {
                 controller.fileListVC.load(controller.currentURL, select: [controller.currentURL.appendingPathComponent(name)])
             }
@@ -56,16 +64,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
-    /// Start folder: `-startPath <path>` launch argument (used for testing), otherwise the home folder.
+    /// Start folder: `-startPath <path>` launch argument (used for testing), otherwise from the settings.
     private func startURL() -> URL {
-        if let raw = UserDefaults.standard.string(forKey: "startPath") {
-            let path = (raw as NSString).expandingTildeInPath
-            var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue {
-                return URL(fileURLWithPath: path)
-            }
+        let settings = Settings.shared
+        var candidates: [String?] = [UserDefaults.standard.string(forKey: "startPath")]
+        switch settings.startFolderMode {
+        case "last": candidates.append(settings.lastFolderPath)
+        case "custom": candidates.append(settings.startFolderPath)
+        default: break
+        }
+        for case let raw? in candidates {
+            let url = URL(fileURLWithPath: (raw as NSString).expandingTildeInPath)
+            if DirectoryReader.isDirectory(url) { return url }
         }
         return FileManager.default.homeDirectoryForCurrentUser
+    }
+
+    @objc func showSettings(_ sender: Any?) {
+        SettingsWindowController.show()
     }
 
     @objc func newWindow(_ sender: Any?) {
@@ -73,15 +89,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openWindow(at: current ?? FileManager.default.homeDirectoryForCurrentUser)
     }
 
-    func openWindow(at url: URL) {
+    /// Creates a window (used for new windows and new tabs) and keeps it alive until it is closed.
+    func makeController(at url: URL) -> MainWindowController {
         let controller = MainWindowController(url: url)
         controller.onClose = { [weak self, weak controller] in
             self?.windowControllers.removeAll { $0 === controller }
         }
-        if let previous = windowControllers.last?.window, let window = controller.window {
+        windowControllers.append(controller)
+        return controller
+    }
+
+    func openWindow(at url: URL) {
+        let previousWindow = windowControllers.last?.window
+        let controller = makeController(at: url)
+        if let previous = previousWindow, let window = controller.window {
             window.setFrameTopLeftPoint(NSPoint(x: previous.frame.minX + 26, y: previous.frame.maxY - 26))
         }
-        windowControllers.append(controller)
         controller.showWindow(nil)
     }
 }
@@ -114,6 +137,8 @@ enum MainMenu {
         submenu("MacExplorer", [
             item("Über MacExplorer", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
             sep(),
+            item("Einstellungen …", #selector(AppDelegate.showSettings(_:)), ","),
+            sep(),
             item("MacExplorer ausblenden", #selector(NSApplication.hide(_:)), "h"),
             item("Andere ausblenden", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
             item("Alle einblenden", #selector(NSApplication.unhideAllApplications(_:))),
@@ -124,6 +149,7 @@ enum MainMenu {
         let backspace = String(Character(UnicodeScalar(NSBackspaceCharacter)!))
         submenu("Ablage", [
             item("Neues Fenster", #selector(AppDelegate.newWindow(_:)), "n"),
+            item("Neuer Tab", #selector(NSResponder.newWindowForTab(_:)), "t"),
             item("Neuer Ordner", #selector(MainWindowController.newFolder(_:)), "n", [.command, .shift]),
             item("Neues Textdokument", #selector(MainWindowController.newTextFile(_:))),
             sep(),
@@ -150,10 +176,14 @@ enum MainMenu {
             item("Alles auswählen", #selector(NSText.selectAll(_:)), "a"),
             sep(),
             item("Pfad kopieren", #selector(MainWindowController.copyPath(_:)), "c", [.command, .option]),
+            item("Suchen", #selector(MainWindowController.focusSearch(_:)), "f"),
             sep(),
             item("Vor dem Löschen nachfragen", #selector(MainWindowController.toggleConfirmTrash(_:))),
         ])
-        submenu("Darstellung", [
+        submenu("Darstellung", ViewMode.allCases.map { mode in
+            item(mode.title, #selector(MainWindowController.setViewMode(_:)), mode.shortcut, object: mode.rawValue)
+        } + [
+            sep(),
             item("Seitenleiste ausblenden", #selector(MainWindowController.toggleSidebarPane(_:)), "s", [.command, .control]),
             item("Versteckte Dateien anzeigen", #selector(MainWindowController.toggleHiddenFiles(_:)), ".", [.command, .shift]),
             item("Dateien im Baum ausblenden", #selector(MainWindowController.toggleFilesInTree(_:))),

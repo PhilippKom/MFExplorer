@@ -29,6 +29,8 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - Starten: `open build/Debug/MacExplorer.app`
 - Selbsttest (nur Debug-Build): `open -n build/Debug/MacExplorer.app --args -startPath ~/ExplorerTest -snapshotPath <scratchpad>/bild.png [-debugReveal YES]`
   speichert nach dem Start ein Bild des Fensters (Bildschirmaufnahme von außen ist nicht erlaubt).
+  Weitere Test-Argumente: `-debugSelect <Name>`, `-debugSearch <Text>`, `-debugSettings YES`, `-debugSnapDelay <Sek.>`, `-defaultViewMode large`, `-showPreviewPane YES`.
+  Inhalte, die macOS in einem eigenen Prozess zeichnet (Bild-/HTML-Vorschau), erscheinen auf diesen Bildern leer.
 - Selbsttest der Dateioperationen (nur Debug-Build, arbeitet nur in `~/ExplorerTest/_selftest`):
   `open -n build/Debug/MacExplorer.app --args -selfTest <scratchpad>/selftest.log` – schreibt PASS/FAIL ins Protokoll und beendet sich. Nach Änderungen an `FileOperations.swift` immer laufen lassen.
 
@@ -37,4 +39,6 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - `MainWindowController.swift`: Fenster, Navigation, alle Befehle und Kontextmenüs.
 - `FileListViewController.swift`: Detailansicht (Auswahlrechteck, Umbenennen, Drag & Drop).
 - `SidebarViewController.swift`: Baum (unabhängig von der Hauptansicht).
-- `Bars.swift`: Adress-, Befehls- und Statusleiste. `PropertiesWindow.swift`: Eigenschaften-Fenster.
+- `Bars.swift`: Adress- (mit Suchfeld), Befehls- und Statusleiste. `PropertiesWindow.swift`: Eigenschaften-Fenster.
+- `IconView.swift`: Symbolansicht mit Vorschaubildern. `Preview.swift`: Vorschaubereich und Schnellansicht. `SettingsWindow.swift`: Einstellungen.
+- Tabs sind native macOS-Fenster-Tabs (jeder Tab = ein `MainWindowController`).

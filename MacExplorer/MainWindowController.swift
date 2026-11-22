@@ -84,7 +84,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         window.setContentSize(NSSize(width: 1100, height: 680))
         window.center()
         window.setFrameAutosaveName("MainWindow")
-        window.initialFirstResponder = fileListVC.tableView
+        window.initialFirstResponder = fileListVC.activeView
+        window.tabbingIdentifier = "MacExplorerMain"
+        window.tabbingMode = .automatic
 
         sidebarVC.delegate = self
         fileListVC.delegate = self
@@ -93,6 +95,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             self?.focusFileList()
         }
         addressBar.breadcrumb.onCancel = { [weak self] in self?.focusFileList() }
+        addressBar.onSearch = { [weak self] query in self?.search(query) }
         installKeyMonitor()
         commandBar.setPreviewVisible(!previewSplitItem.isCollapsed)
 
@@ -175,27 +178,57 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     }
 
     private func focusFileList() {
-        window?.makeFirstResponder(fileListVC.tableView)
+        window?.makeFirstResponder(fileListVC.activeView)
     }
 
     /// Windows habits that are not menu shortcuts: ⌫ / Entf, Alt+Up/Left/Right and F5.
     private func installKeyMonitor() {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, let window = self.window, event.window === window, window.attachedSheet == nil else { return event }
-            if window.firstResponder is NSText { return event }   // typing in a text field
             let mods = event.modifierFlags.intersection([.command, .option, .control, .shift])
+            if Settings.shared.windowsShortcuts, mods.contains(.control), !mods.contains(.command), !mods.contains(.option),
+               let action = self.windowsShortcut(event, shift: mods.contains(.shift)) {
+                NSApp.sendAction(action, to: nil, from: self)
+                return nil
+            }
+            if window.firstResponder is NSText { return event }   // typing in a text field
             let inTree = window.firstResponder === self.sidebarVC.outline
             switch (event.keyCode, mods) {
             case (126, .option): self.goUp(nil)                     // ⌥↑
             case (123, .option) where !inTree: self.goBack(nil)     // ⌥←
             case (124, .option) where !inTree: self.goForward(nil)  // ⌥→
             case (96, []): self.refresh(nil)                        // F5
+            case (51, []) where Settings.shared.backspaceGoesBack: self.goBack(nil)   // ⌫ = back (Windows)
             case (51, []), (117, []): self.moveToTrash(nil)         // ⌫ and forward delete
+            case (36, .option): self.showProperties(nil)           // ⌥↩ (Windows: Alt+Enter)
+            case (99, []): self.focusSearch(nil)                    // F3
             case (49, []): self.toggleQuickLook(nil)                // space
             case (35, .option): self.togglePreviewPane(nil)         // ⌥P (Windows: Alt+P)
             default: return event
             }
             return nil
+        }
+    }
+
+    /// Optional Windows shortcuts with ctrl (Strg).
+    private func windowsShortcut(_ event: NSEvent, shift: Bool) -> Selector? {
+        guard let key = event.charactersIgnoringModifiers?.lowercased() else { return nil }
+        if shift { return key == "n" ? #selector(newFolder(_:)) : (key == "z" ? Selector(("redo:")) : nil) }
+        switch key {
+        case "c": return #selector(NSText.copy(_:))
+        case "x": return #selector(NSText.cut(_:))
+        case "v": return #selector(NSText.paste(_:))
+        case "a": return #selector(NSText.selectAll(_:))
+        case "z": return Selector(("undo:"))
+        case "y": return Selector(("redo:"))
+        case "f", "e": return #selector(focusSearch(_:))
+        case "l": return #selector(focusAddressBar(_:))
+        case "t": return #selector(newWindowForTab(_:))
+        case "w": return #selector(NSWindow.performClose(_:))
+        case "n": return #selector(AppDelegate.newWindow(_:))
+        case "d": return #selector(moveToTrash(_:))
+        case "r": return #selector(refresh(_:))
+        default: return nil
         }
     }
 
@@ -212,7 +245,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             forwardStack.removeAll()
         }
         currentURL = url
+        addressBar.clearSearch()
         fileListVC.load(url, select: select, rename: rename)
+        Settings.shared.lastFolderPath = url.path
         updateChrome()
     }
 
@@ -227,7 +262,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         let selected = fileListVC.selectedItems
         let files = selected.filter { !$0.isFolder }
         let size: Int64? = files.isEmpty ? nil : files.compactMap(\.size).reduce(0, +)
-        statusBar.update(total: fileListVC.items.count, selected: selected.count, selectedSize: size)
+        statusBar.update(total: fileListVC.items.count, selected: selected.count, selectedSize: size,
+                         searching: fileListVC.searchQuery == nil ? nil : fileListVC.isSearchRunning)
         updateCommandBar()
         updatePreview()
     }
@@ -302,7 +338,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             return true
         case 125, 126:   // up / down: move the selection in the list, the preview follows
             if quickLookItems.count <= 1 || fileListVC.selectedItems.count <= 1 {
-                fileListVC.tableView.keyDown(with: event)
+                fileListVC.activeView.keyDown(with: event)
                 return true
             }
             return false
@@ -312,7 +348,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     }
 
     func previewPanel(_ panel: QLPreviewPanel!, sourceFrameOnScreenFor item: QLPreviewItem!) -> NSRect {
-        guard let item = item as? PreviewItem, let window,
+        guard fileListVC.viewMode == .details, let item = item as? PreviewItem, let window,
               let row = fileListVC.items.firstIndex(where: { $0.url == item.source }) else { return .zero }
         let table = fileListVC.tableView
         let rect = table.rect(ofRow: row)
@@ -356,6 +392,44 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
     @objc func focusAddressBar(_ sender: Any?) {
         addressBar.breadcrumb.beginEditing()
+    }
+
+    // MARK: - Search, view mode, tabs
+
+    @objc func focusSearch(_ sender: Any?) {
+        window?.makeFirstResponder(addressBar.searchField)
+    }
+
+    private func search(_ query: String) {
+        if query.isEmpty {
+            fileListVC.endSearch()
+            window?.title = FileManager.default.displayName(atPath: currentURL.path)
+        } else {
+            fileListVC.startSearch(query, in: currentURL)
+            window?.title = "Suche: \(query)"
+        }
+    }
+
+    @objc func setViewMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let mode = ViewMode(rawValue: raw) else { return }
+        fileListVC.setViewMode(mode)
+        Settings.shared.defaultViewMode = raw
+    }
+
+    /// ⌘T and the "+" in the tab bar: a new tab showing the same folder.
+    override func newWindowForTab(_ sender: Any?) {
+        openTab(at: currentURL)
+    }
+
+    @objc func openInNewTab(_ sender: Any?) {
+        guard let url = context(sender).urls.first else { return }
+        openTab(at: url)
+    }
+
+    private func openTab(at url: URL) {
+        guard let app = NSApp.delegate as? AppDelegate, let window, let newWindow = app.makeController(at: url).window else { return }
+        window.addTabbedWindow(newWindow, ordered: .above)
+        newWindow.makeKeyAndOrderFront(nil)
     }
 
     /// If the folder shown on the right was renamed or removed, follow it / step out of it.
@@ -406,6 +480,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     @objc func openWithApp(_ sender: NSMenuItem) {
         guard let request = sender.representedObject as? OpenWithRequest else { return }
         NSWorkspace.shared.open(request.urls, withApplicationAt: request.app, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    /// From a search result: open the folder that contains it and select it.
+    @objc func openContainingFolder(_ sender: Any?) {
+        guard let url = context(sender).urls.first else { return }
+        navigate(to: url.deletingLastPathComponent(), select: [url])
     }
 
     @objc func revealInFinder(_ sender: Any?) {
@@ -477,17 +557,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     }
 
     private func renameWithDialog(_ url: URL) {
-        let alert = NSAlert()
-        alert.messageText = "Umbenennen"
-        alert.informativeText = "Neuer Name für „\(url.lastPathComponent)“:"
-        let field = NSTextField(string: url.lastPathComponent)
-        field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
-        alert.accessoryView = field
-        alert.addButton(withTitle: "Umbenennen")
-        alert.addButton(withTitle: "Abbrechen").keyEquivalent = "\u{1b}"
-        alert.window.initialFirstResponder = field
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        if let new = FileOps.shared.rename(url, to: field.stringValue) { fixCurrentFolder(old: url, new: new) }
+        guard let name = FileOps.askNewName(for: url) else { return }
+        if let new = FileOps.shared.rename(url, to: name) { fixCurrentFolder(old: url, new: new) }
     }
 
     func fileList(_ list: FileListViewController, rename url: URL, to name: String) {
@@ -672,12 +743,20 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
     private func makeViewMenu() -> NSMenu {
         let menu = NSMenu()
+        for mode in ViewMode.allCases {
+            let item = NSMenuItem(title: mode.title, action: #selector(setViewMode(_:)), keyEquivalent: "")
+            item.representedObject = mode.rawValue
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Seitenleiste", action: #selector(toggleSidebarPane(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Vorschaubereich", action: #selector(togglePreviewPane(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Schnellansicht (Leertaste)", action: #selector(toggleQuickLook(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Versteckte Dateien anzeigen", action: #selector(toggleHiddenFiles(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Dateien im Baum ausblenden", action: #selector(toggleFilesInTree(_:)), keyEquivalent: ""))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Einstellungen …", action: #selector(AppDelegate.showSettings(_:)), keyEquivalent: ""))
         return menu
     }
 
@@ -735,7 +814,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         let singleFolder = selected.count == 1 && selected[0].isFolder ? selected[0] : nil
 
         menu.addItem(menuItem("Öffnen", #selector(openSelection(_:)), ctx, symbol: "arrow.up.forward.app"))
+        if fileListVC.searchQuery != nil, urls.count == 1 {
+            menu.addItem(menuItem("Speicherort öffnen", #selector(openContainingFolder(_:)), ctx, symbol: "folder"))
+        }
         if let folder = singleFolder {
+            menu.addItem(menuItem("In neuem Tab öffnen", #selector(openInNewTab(_:)), ActionContext(urls: [folder.url], folder: folder.url), symbol: "plus.square.on.square"))
             menu.addItem(menuItem("In neuem Fenster öffnen", #selector(openInNewWindow(_:)), ActionContext(urls: [folder.url], folder: folder.url), symbol: "macwindow.badge.plus"))
         } else if selected.allSatisfy({ !$0.isFolder }), let first = urls.first {
             let apps = NSWorkspace.shared.urlsForApplications(toOpen: first).prefix(12)
@@ -786,6 +869,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         guard let ctx = treeContext(node) else { return }
         menu.addItem(menuItem("Öffnen", #selector(openSelection(_:)), ctx, symbol: "arrow.up.forward.app"))
         if node.isFolder {
+            menu.addItem(menuItem("In neuem Tab öffnen", #selector(openInNewTab(_:)), ctx, symbol: "plus.square.on.square"))
             menu.addItem(menuItem("In neuem Fenster öffnen", #selector(openInNewWindow(_:)), ctx, symbol: "macwindow.badge.plus"))
         }
         menu.addItem(.separator())
@@ -847,6 +931,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             } else {
                 item.title = previewSplitItem.isCollapsed ? "Vorschaubereich einblenden" : "Vorschaubereich ausblenden"
             }
+        case #selector(setViewMode(_:)):
+            item.state = (item.representedObject as? String) == fileListVC.viewMode.rawValue ? .on : .off
         case #selector(sortByColumn(_:)):
             item.state = (item.representedObject as? String) == fileListVC.sortKey ? .on : .off
         case #selector(sortAscending(_:)):

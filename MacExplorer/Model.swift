@@ -26,6 +26,55 @@ final class Settings {
         set { defaults.set(newValue, forKey: "hideFilesInTree"); NotificationCenter.default.post(name: .settingsChanged, object: nil) }
     }
 
+    private func flag(_ key: String, default value: Bool = false) -> Bool {
+        defaults.object(forKey: key) as? Bool ?? value
+    }
+
+    private func setFlag(_ key: String, _ value: Bool) {
+        defaults.set(value, forKey: key)
+        NotificationCenter.default.post(name: .settingsChanged, object: nil)
+    }
+
+    /// Show "Bericht.docx" instead of "Bericht" for every file.
+    var showAllExtensions: Bool {
+        get { flag("showAllExtensions") }
+        set { setFlag("showAllExtensions", newValue) }
+    }
+
+    /// ⌫ goes back (Windows) instead of moving to the Trash.
+    var backspaceGoesBack: Bool {
+        get { flag("backspaceGoesBack") }
+        set { setFlag("backspaceGoesBack", newValue) }
+    }
+
+    /// Ctrl+C / Ctrl+V / Ctrl+Z … work like on Windows (in addition to ⌘).
+    var windowsShortcuts: Bool {
+        get { flag("windowsShortcuts") }
+        set { setFlag("windowsShortcuts", newValue) }
+    }
+
+    /// "home", "last" or "custom".
+    var startFolderMode: String {
+        get { defaults.string(forKey: "startFolderMode") ?? "home" }
+        set { defaults.set(newValue, forKey: "startFolderMode") }
+    }
+
+    var startFolderPath: String? {
+        get { defaults.string(forKey: "startFolderPath") }
+        set { defaults.set(newValue, forKey: "startFolderPath") }
+    }
+
+    var lastFolderPath: String? {
+        get { defaults.string(forKey: "lastFolderPath") }
+        set { defaults.set(newValue, forKey: "lastFolderPath") }
+    }
+
+    /// View for new windows: "details", "medium", "large", "extraLarge".
+    var defaultViewMode: String {
+        get { defaults.string(forKey: "defaultViewMode") ?? "details" }
+        set { defaults.set(newValue, forKey: "defaultViewMode") }
+    }
+
     var favorites: [URL] {
         get { (defaults.stringArray(forKey: "favorites") ?? []).map { URL(fileURLWithPath: $0) } }
         set {
@@ -67,13 +116,14 @@ final class FileItem {
     init(url: URL) {
         self.url = url
         let v = try? url.resourceValues(forKeys: Set(FileItem.resourceKeys))
-        name = v?.localizedName ?? url.lastPathComponent
         var directory = v?.isDirectory ?? false
         if v?.isSymbolicLink == true {
             var isDir: ObjCBool = false
             if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) { directory = isDir.boolValue }
         }
         isFolder = directory && !(v?.isPackage ?? false)
+        // Folders keep their translated names ("Schreibtisch"); files optionally always show the extension.
+        name = (!isFolder && Settings.shared.showAllExtensions) ? url.lastPathComponent : (v?.localizedName ?? url.lastPathComponent)
         isHidden = v?.isHidden ?? url.lastPathComponent.hasPrefix(".")
         modified = v?.contentModificationDate
         created = v?.creationDate

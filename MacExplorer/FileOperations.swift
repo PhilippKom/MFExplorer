@@ -137,6 +137,28 @@ final class FileOps {
         Self.showErrors("Nicht alles konnte rückgängig gemacht werden.", errors)
     }
 
+    /// Small "Umbenennen" dialog (used in the tree and the icon view). nil = cancelled.
+    static func askNewName(for url: URL) -> String? {
+        let alert = NSAlert()
+        alert.messageText = "Umbenennen"
+        alert.informativeText = "Neuer Name für „\(url.lastPathComponent)“:"
+        let field = NSTextField(string: url.lastPathComponent)
+        field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Umbenennen")
+        alert.addButton(withTitle: "Abbrechen").keyEquivalent = "\u{1b}"
+        alert.window.initialFirstResponder = field
+        alert.layout()
+        if let editor = field.currentEditor() ?? (alert.window.makeFirstResponder(field) ? field.currentEditor() : nil) {
+            let name = url.lastPathComponent as NSString
+            let ext = name.pathExtension
+            let length = ext.isEmpty ? name.length : name.length - (ext as NSString).length - 1
+            editor.selectedRange = NSRange(location: 0, length: max(0, length))
+        }
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        return field.stringValue
+    }
+
     // MARK: - Simple operations (fast, on the main thread)
 
     func trashItems(_ urls: [URL]) {
