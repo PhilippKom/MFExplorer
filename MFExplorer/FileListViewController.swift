@@ -218,7 +218,7 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         tableView.allowsColumnResizing = true
         tableView.allowsEmptySelection = true
         tableView.columnAutoresizingStyle = .noColumnAutoresizing
-        tableView.rowHeight = 22
+        tableView.rowHeight = 30
         tableView.gridStyleMask = []
         tableView.usesAlternatingRowBackgroundColors = false
 
@@ -690,7 +690,7 @@ final class FileListViewController: NSViewController, NSTableViewDataSource, NST
         let dimmed = item.isHidden || FileClipboard.shared.isCut(item.url)
         if id == "name" {
             let cell = tableView.makeView(withIdentifier: NSUserInterfaceItemIdentifier("NameCell"), owner: self) as? NSTableCellView
-                ?? Cells.iconCell("NameCell")
+                ?? Cells.iconCell("NameCell", iconSize: FileItem.listIconSize)
             cell.textField?.isEditable = false
             cell.textField?.drawsBackground = false
             cell.textField?.stringValue = item.name

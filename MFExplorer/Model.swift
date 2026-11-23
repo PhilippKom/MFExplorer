@@ -111,10 +111,13 @@ final class FileItem {
     let tags: [String]
 
     private var cachedIcon: NSImage?
+    /// Icon size in the details list (the tree stays at 16).
+    static let listIconSize: CGFloat = 24
+
     var icon: NSImage {
         if let cachedIcon { return cachedIcon }
         let image = NSWorkspace.shared.icon(forFile: url.path)
-        image.size = NSSize(width: 16, height: 16)
+        image.size = NSSize(width: FileItem.listIconSize, height: FileItem.listIconSize)
         cachedIcon = image
         return image
     }
@@ -202,7 +205,7 @@ enum Format {
 
 /// Small factories for table cells (used by the tree and the file list).
 enum Cells {
-    static func iconCell(_ id: String) -> NSTableCellView {
+    static func iconCell(_ id: String, iconSize: CGFloat = 16) -> NSTableCellView {
         let cell = NSTableCellView()
         cell.identifier = NSUserInterfaceItemIdentifier(id)
         let image = NSImageView()
@@ -219,8 +222,8 @@ enum Cells {
         NSLayoutConstraint.activate([
             image.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
             image.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            image.widthAnchor.constraint(equalToConstant: 16),
-            image.heightAnchor.constraint(equalToConstant: 16),
+            image.widthAnchor.constraint(equalToConstant: iconSize),
+            image.heightAnchor.constraint(equalToConstant: iconSize),
             text.leadingAnchor.constraint(equalTo: image.trailingAnchor, constant: 6),
             text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
             text.centerYAnchor.constraint(equalTo: cell.centerYAnchor),

@@ -275,7 +275,9 @@ final class BreadcrumbView: NSView, NSTextFieldDelegate {
             let item = NSMenuItem(title: folder.name, action: #selector(menuNavigate(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = folder.url
-            item.image = folder.icon
+            let icon = folder.icon.copy() as? NSImage
+            icon?.size = NSSize(width: 16, height: 16)   // menus keep small icons
+            item.image = icon
             if let next, folder.url.standardizedFileURL == next { item.state = .on }
             menu.addItem(item)
         }
