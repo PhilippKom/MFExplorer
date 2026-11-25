@@ -5,7 +5,7 @@
 	<key>CFBundleAllowMixedLocalizations</key>
 	<true/>
 	<key>MFFeedbackEmail</key>
-	<string></string>
+	<string>MFExplorer@icloud.com</string>
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/PhilippKom/MFExplorer/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
