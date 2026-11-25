@@ -45,6 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let path = UserDefaults.standard.string(forKey: "spaceTest") { runSpaceTest(log: path) }
         if let path = UserDefaults.standard.string(forKey: "closeTest") { runCloseTest(log: path) }
         if let path = UserDefaults.standard.string(forKey: "searchTest") { runSearchTest(log: path) }
+        if let path = UserDefaults.standard.string(forKey: "feedbackTest") { Feedback.runTest(log: path) }
         if let path = UserDefaults.standard.string(forKey: "selfTest") {
             selfTest = DebugSelfTest(logPath: path)
             selfTest?.run()
@@ -425,6 +426,10 @@ enum MainMenu {
             item("Alle nach vorne bringen", #selector(NSApplication.arrangeInFront(_:))),
         ])
         NSApp.windowsMenu = windowMenu
+        let helpMenu = submenu("Hilfe", [
+            item("Feedback senden …", #selector(AppDelegate.sendFeedback(_:))),
+        ])
+        NSApp.helpMenu = helpMenu
         return main
     }
 }
