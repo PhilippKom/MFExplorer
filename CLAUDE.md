@@ -55,6 +55,7 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 ## Updates und Veröffentlichung (Sparkle)
 - Sparkle 2 kommt als Swift-Paket (`build/SourcePackages`). Feed: `appcast.xml` im Repo (über raw.githubusercontent.com). Öffentlicher Schlüssel in `Config/Info.plist`, der private liegt im Schlüsselbund unter dem Konto `mfexplorer`.
 - In Debug-Builds startet der Updater nicht (keine Update-Dialoge bei Tests).
+- Ab Version 1.3 werden Releases mit dem eigenen Zertifikat „MFExplorer Code Signing“ (Schlüsselbund, selbst erstellt, kein Apple-Zertifikat) unterschrieben: `Tools/sign_app.sh`. So behält macOS die Erlaubnisse (Festplattenvollzugriff, Downloads …) über Updates hinweg. Zertifikat nie löschen oder ersetzen, sonst muss jeder Nutzer einmal neu erlauben. Das Apple-Development-Zertifikat im Schlüsselbund nicht benutzen (enthält eine private Adresse).
 - Neue Version veröffentlichen, nur mit ausdrücklichem OK des Nutzers: `Tools/release.sh <Version> <notizen.md>`. Das Skript erhöht die Build-Nummer, baut, unterschreibt, erstellt das GitHub-Release und ergänzt danach `appcast.xml`.
 - Git-Absender in diesem Repo: `PhilippKom <72168776+PhilippKom@users.noreply.github.com>`. Niemals die private E-Mail-Adresse verwenden.
 

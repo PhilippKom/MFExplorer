@@ -6,7 +6,8 @@
 # Example: Tools/release.sh 1.2 /tmp/notes.md
 #
 # notes.md: short German release notes in Markdown ("- " lines become a list).
-# Needs: Xcode, gh (logged in), the Sparkle signing key "mfexplorer" in the keychain.
+# Needs: Xcode, gh (logged in), the Sparkle signing key "mfexplorer" and the certificate
+#        "MFExplorer Code Signing" in the keychain.
 set -euo pipefail
 
 VERSION="${1:?Version fehlt, z. B. 1.2}"
@@ -34,7 +35,8 @@ echo "→ Version $VERSION (Build $BUILD)"
 xcodebuild -resolvePackageDependencies -project MFExplorer.xcodeproj -clonedSourcePackagesDirPath "$PACKAGES" >/dev/null
 xcodebuild -project MFExplorer.xcodeproj -target MFExplorer -configuration Release \
   SYMROOT="$ROOT/build" OBJROOT="$ROOT/build/obj" -clonedSourcePackagesDirPath "$PACKAGES" build | grep -E "error|BUILD"
-codesign --verify --deep build/Release/MFExplorer.app
+# Fixed own signature, so macOS keeps the users' permissions across updates
+Tools/sign_app.sh build/Release/MFExplorer.app
 
 # 3. ZIP + Sparkle signature
 mkdir -p dist

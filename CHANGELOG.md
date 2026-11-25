@@ -1,6 +1,7 @@
 # Änderungen
 
 ## Unveröffentlicht (für das nächste Update gesammelt)
+- MFExplorer hat jetzt eine feste digitale Unterschrift. Nach diesem Update fragt macOS noch ein letztes Mal nach Festplattenvollzugriff und Ordnern, danach bleiben die Erlaubnisse auch bei künftigen Updates erhalten.
 
 ## 1.2 – 25.11.2026
 - Der Fenstertitel zeigt „MFExplorer – v<Version>“. Die Tabs zeigen weiter den Ordnernamen.
