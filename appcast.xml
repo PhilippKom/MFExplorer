@@ -7,6 +7,15 @@
     <language>de</language>
     <!-- Neue Versionen fügt Tools/release.sh hier oben ein. -->
     <item>
+      <title>Version 1.3</title>
+      <pubDate>Wed, 25 Nov 2026 22:39:14 +0100</pubDate>
+      <sparkle:version>4</sparkle:version>
+      <sparkle:shortVersionString>1.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<h3>Neu in Version 1.3</h3><ul><li>MFExplorer hat jetzt eine feste digitale Unterschrift.</li><li>Nach diesem Update fragt macOS ein letztes Mal nach Festplattenvollzugriff und dem Zugriff auf Ordner wie Downloads oder Schreibtisch.</li><li>Ab dann bleiben diese Erlaubnisse auch bei künftigen Updates erhalten.</li></ul>]]></description>
+      <enclosure url="https://github.com/PhilippKom/MFExplorer/releases/download/v1.3/MFExplorer-1.3.zip" type="application/octet-stream" sparkle:edSignature="7G04v9zjiREWJuSfqPwuUUMvXXBAJ546aFoffze0Cp060g+Eu2f03JdsXNaAQyDRjXUbwY1bv5YK/YkPdpSuBw==" length="2049812" />
+    </item>
+    <item>
       <title>Version 1.2</title>
       <pubDate>Wed, 25 Nov 2026 22:06:10 +0100</pubDate>
       <sparkle:version>3</sparkle:version>
