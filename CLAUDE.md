@@ -27,10 +27,11 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - Bauen (Projekt nutzt einen automatisch synchronisierten Quellordner `MFExplorer/` – neue .swift-Dateien einfach dort ablegen):
   `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project MFExplorer.xcodeproj -target MFExplorer -configuration Debug SYMROOT="$PWD/build" OBJROOT="$PWD/build/obj" -clonedSourcePackagesDirPath "$PWD/build/SourcePackages" build`
 - Starten: `open build/Debug/MFExplorer.app`
+- Debug-Builds heißen „MFExplorer Test“ und haben eine eigene Kennung (`io.github.philippkom.mfexplorer.debug`). So berühren Tests nie die Einstellungen und macOS-Erlaubnisse (Festplattenvollzugriff, Downloads …) der installierten App. Test-Apps nur mit `pkill -f build/Debug/MFExplorer.app` beenden, nie `pkill -x MFExplorer` (beendet sonst die App des Nutzers).
 - Selbsttest (nur Debug-Build): `open -n build/Debug/MFExplorer.app --args -startPath ~/ExplorerTest -snapshotPath <scratchpad>/bild.png [-debugReveal YES]`
   speichert nach dem Start ein Bild des Fensters (Bildschirmaufnahme von außen ist nicht erlaubt).
   Weitere Test-Argumente: `-debugSelect <Name>`, `-debugSearch <Text>`, `-debugSettings YES`, `-debugSnapDelay <Sek.>`, `-defaultViewMode large`, `-showPreviewPane YES`.
-  README-Bilder (ganzes Fenster mit Titelleiste, feste Größe, Sortierung nach Name): `-snapshotWindowFrame YES -debugWindowSize 1320x760 -sortKey name -sortAscending YES -debugPreview on|off`. Danach `sortKey`/`sortAscending` in den Einstellungen des Nutzers zurücksetzen (werden sonst gespeichert).
+  README-Bilder (ganzes Fenster mit Titelleiste, feste Größe, Sortierung nach Name): `-snapshotWindowFrame YES -debugWindowSize 1320x760 -sortKey name -sortAscending YES -debugPreview on|off`.
   Inhalte, die macOS in einem eigenen Prozess zeichnet (Bild-/HTML-Vorschau), erscheinen auf diesen Bildern leer.
 - Selbsttest der Dateioperationen (nur Debug-Build, arbeitet nur in `~/ExplorerTest/_selftest`):
   `open -n build/Debug/MFExplorer.app --args -selfTest <scratchpad>/selftest.log`

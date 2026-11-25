@@ -187,7 +187,7 @@
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = MFExplorer;
+				INFOPLIST_KEY_CFBundleDisplayName = "MFExplorer Test";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 PhilippKom · MIT-Lizenz";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -196,7 +196,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.philippkom.mfexplorer;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.philippkom.mfexplorer.debug;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 			};
