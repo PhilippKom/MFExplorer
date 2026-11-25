@@ -7,6 +7,15 @@
     <language>de</language>
     <!-- Neue Versionen fügt Tools/release.sh hier oben ein. -->
     <item>
+      <title>Version 1.2</title>
+      <pubDate>Wed, 25 Nov 2026 22:06:10 +0100</pubDate>
+      <sparkle:version>3</sparkle:version>
+      <sparkle:shortVersionString>1.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<h3>Neu in Version 1.2</h3><ul><li>Der Fenstertitel zeigt jetzt „MFExplorer – v1.2“. Die Tabs zeigen weiter den Ordnernamen.</li><li>Neues Vorschaufenster für die Leertaste: Bei Ordnern zeigt es Anzahl, Größe und Datum, bei Dateien die gewohnte Vorschau. Es gibt immer nur ein Fenster.</li><li>Das Vorschaufenster schließt zuverlässig mit Esc, Leertaste oder einem Klick aufs X. ↑/↓ wechselt den Eintrag, ←/→ blättert durch mehrere markierte Dateien.</li><li>Die überflüssigen Knöpfe „Öffnen mit Safari“ und „Teilen“ in der Vorschau sind weg.</li><li>Luftigere Detailansicht: höhere Zeilen und größere Symbole, sodass man die Dateitypen besser erkennt. Der Ordnerbaum bleibt kompakt.</li><li>Neu im Menü „Hilfe → Feedback senden …“: öffnet dein Mail-Programm mit einer vorbereiteten Nachricht.</li></ul>]]></description>
+      <enclosure url="https://github.com/PhilippKom/MFExplorer/releases/download/v1.2/MFExplorer-1.2.zip" type="application/octet-stream" sparkle:edSignature="28z8N9usntxQujvJdV3spSSSw1osr54ZA6Ij1qlYqklWtr0fzoqi0cAHlA5Hi84YNh/3/Z2GZ08Kx7iUHmnABQ==" length="2033736" />
+    </item>
+    <item>
       <title>Version 1.1</title>
       <pubDate>Sun, 22 Nov 2026 18:13:15 +0100</pubDate>
       <sparkle:version>2</sparkle:version>
