@@ -247,6 +247,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let path = defaults.string(forKey: "snapshotPath") else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             guard let controller = self?.windowControllers.first, let mainView = controller.window?.contentView else { return }
+            // `-debugWindowSize 1100x700`: fixed size for README pictures (without saving it as the user's window size)
+            if let size = defaults.string(forKey: "debugWindowSize")?.split(separator: "x").compactMap({ Double($0) }),
+               size.count == 2, let window = controller.window {
+                window.setFrameAutosaveName("")
+                window.setFrame(NSRect(x: 100, y: 100, width: size[0], height: size[1]), display: true)
+            }
             if defaults.bool(forKey: "debugReveal") {
                 controller.revealInTree(nil)
                 controller.sidebarVC.outline.deselectAll(nil)   // selection looks black on these pictures
@@ -255,7 +261,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let query = defaults.string(forKey: "debugSearch") {
                 controller.fileListVC.startSearch(query, in: controller.currentURL)
             }
-            var view = mainView
+            // `-snapshotWindowFrame YES`: whole window including the title bar (for README pictures)
+            var view = defaults.bool(forKey: "snapshotWindowFrame") ? (mainView.superview ?? mainView) : mainView
             if defaults.bool(forKey: "debugSettings") {
                 SettingsWindowController.show()
                 if let settingsView = NSApp.windows.first(where: { $0.title == "Einstellungen" })?.contentView { view = settingsView }

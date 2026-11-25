@@ -30,6 +30,7 @@ Die Funktionsbeschreibung steht in [SPEC.md](SPEC.md).
 - Selbsttest (nur Debug-Build): `open -n build/Debug/MFExplorer.app --args -startPath ~/ExplorerTest -snapshotPath <scratchpad>/bild.png [-debugReveal YES]`
   speichert nach dem Start ein Bild des Fensters (Bildschirmaufnahme von außen ist nicht erlaubt).
   Weitere Test-Argumente: `-debugSelect <Name>`, `-debugSearch <Text>`, `-debugSettings YES`, `-debugSnapDelay <Sek.>`, `-defaultViewMode large`, `-showPreviewPane YES`.
+  README-Bilder (ganzes Fenster mit Titelleiste, feste Größe, Sortierung nach Name): `-snapshotWindowFrame YES -debugWindowSize 1320x760 -sortKey name -sortAscending YES -debugPreview on|off`. Danach `sortKey`/`sortAscending` in den Einstellungen des Nutzers zurücksetzen (werden sonst gespeichert).
   Inhalte, die macOS in einem eigenen Prozess zeichnet (Bild-/HTML-Vorschau), erscheinen auf diesen Bildern leer.
 - Selbsttest der Dateioperationen (nur Debug-Build, arbeitet nur in `~/ExplorerTest/_selftest`):
   `open -n build/Debug/MFExplorer.app --args -selfTest <scratchpad>/selftest.log`
