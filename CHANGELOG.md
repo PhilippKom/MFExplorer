@@ -1,6 +1,8 @@
 # Änderungen
 
 ## Unveröffentlicht (für das nächste Update gesammelt)
+
+## 1.2 – 25.11.2026
 - Der Fenstertitel zeigt „MFExplorer – v<Version>“. Die Tabs zeigen weiter den Ordnernamen.
 - Neues eigenes Vorschaufenster für die Leertaste. Bei Ordnern zeigt es Anzahl, Größe und Datum, bei Dateien die gewohnte Vorschau. Es gibt immer nur ein Fenster: Esc, Leertaste oder ein Klick aufs X schließen es, ↑/↓ wechselt den Eintrag, ←/→ blättert durch mehrere markierte Dateien. Die überflüssigen Knöpfe „Öffnen mit Safari“ und „Teilen“ sind weg.
 - Luftigere Detailansicht: höhere Zeilen und größere Symbole, sodass man die Dateitypen besser erkennt. Der Ordnerbaum bleibt kompakt.

@@ -43,6 +43,10 @@ MFExplorer übernimmt den Aufbau und die Gewohnheiten des Windows Explorers: Ord
 Ab Version 1.1 sucht MFExplorer selbst nach neuen Versionen. Dafür nutzt die App [Sparkle](https://sparkle-project.org), den Standard für Mac-Apps außerhalb des App Stores. Gibt es ein Update, fragt die App, ob sie es installieren soll. Updates sind digital unterschrieben, gefälschte Updates werden abgelehnt.
 Du kannst auch selbst suchen: **MFExplorer → Nach Updates suchen …**. Die automatische Suche lässt sich in den Einstellungen abschalten.
 
+## Feedback
+
+Ideen, Wünsche oder Fehler? Im Menü **Hilfe → Feedback senden …** öffnet sich dein Mail-Programm mit einer vorbereiteten Nachricht an MFExplorer@icloud.com. Die App selbst verschickt nichts.
+
 ## Datenschutz
 
 MFExplorer sammelt keine Daten und hat keine Werbung. Die einzige Internetverbindung ist die Update-Suche. Dabei lädt die App einmal täglich die Datei `appcast.xml` aus diesem GitHub-Projekt, oder wenn du selbst suchst. Persönliche Daten werden dabei nicht gesendet.
